@@ -1,0 +1,29 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+dist/
+build/
+
+# Virtual environments
+venv/
+venv-win/
+.venv/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+
+# Test/dev
+test_api.py
+
+# ─── Project-specific ───
+# Local user data — never commit
+clips/
+downloads/
+fonts/
+tiktok_state.json
+*.mp4
+*.wav
+*.env

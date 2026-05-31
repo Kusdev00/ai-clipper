@@ -1,0 +1,2547 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>AI Clipper</title>
+<style>
+/* ═══════════════════════════════════════════════════════════════════════════
+   CYBER-MINIMAL DESIGN SYSTEM
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+:root {
+  --black:       #000000;
+  --charcoal-1:  #0a0a0a;
+  --charcoal-2:  #0f0f0f;
+  --charcoal-3:  #151515;
+  --charcoal-4:  #1a1a1a;
+  --charcoal-5:  #222222;
+  --charcoal-6:  #2a2a2a;
+  --border:      #1e1e1e;
+  --border-light: #2e2e2e;
+  --text-primary:  #f0f0f0;
+  --text-secondary: #999;
+  --text-muted:    #555;
+  --accent:        #a855f7;
+  --accent-dim:    rgba(168,85,247,0.15);
+  --accent-glow:   rgba(168,85,247,0.08);
+  --green:         #22c55e;
+  --green-dim:     rgba(34,197,94,0.12);
+  --red:           #ef4444;
+  --red-dim:       rgba(239,68,68,0.12);
+  --yellow:        #eab308;
+  --yellow-dim:    rgba(234,179,8,0.12);
+  --blue:          #3b82f6;
+  --blue-dim:      rgba(59,130,246,0.12);
+  --cyan:          #06b6d4;
+  --hot:           #f97316;
+  --hot-dim:       rgba(249,115,22,0.15);
+  --radius:        0px;
+  --radius-sm:     0px;
+  --radius-lg:     0px;
+  --font:          'SF Mono', 'JetBrains Mono', 'Fira Code', 'Cascadia Code', monospace;
+  --font-ui:       -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+}
+
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+html { font-size: 13px; -webkit-font-smoothing: antialiased; min-height: 100%; }
+
+body {
+  font-family: var(--font-ui);
+  background: var(--black);
+  color: var(--text-primary);
+  line-height: 1.6;
+  min-height: 100vh;
+  overflow-x: hidden;
+  overflow-y: auto;
+}
+
+/* ── Scrollbar ── */
+::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--charcoal-5); border-radius: 0; }
+::-webkit-scrollbar-thumb:hover { background: var(--charcoal-6); }
+
+/* ── Layout ── */
+.app {
+  display: grid;
+  grid-template-columns: 340px 1fr;
+  grid-template-rows: 48px 1fr;
+  min-height: 100vh;
+}
+
+/* ── Header ── */
+header {
+  grid-column: 1 / -1;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 20px;
+  background: var(--charcoal-1);
+  border-bottom: 1px solid var(--border);
+  z-index: 10;
+}
+
+.logo {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-family: var(--font);
+  font-size: 14px;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+}
+
+.logo-mark {
+  width: 28px;
+  height: 28px;
+  background: var(--accent);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 14px;
+  color: #fff;
+}
+
+.logo-version {
+  font-size: 10px;
+  color: var(--text-muted);
+  font-weight: 400;
+  margin-left: 4px;
+  font-family: var(--font-ui);
+}
+
+.header-status {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.status-dot {
+  width: 6px;
+  height: 6px;
+  background: var(--green);
+  border-radius: 0;
+  animation: pulse-dot 2s ease-in-out infinite;
+}
+
+@keyframes pulse-dot {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.4; }
+}
+
+.status-text {
+  font-size: 11px;
+  color: var(--text-muted);
+  font-family: var(--font);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+/* ── Sidebar ── */
+.sidebar {
+  background: var(--charcoal-1);
+  border-right: 1px solid var(--border);
+  overflow-y: auto;
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  height: calc(100vh - 48px);
+  position: sticky;
+  top: 0;
+}
+
+/* ── Main Content ── */
+.main {
+  height: calc(100vh - 48px);
+  overflow-y: auto;
+  padding: 24px;
+  background: var(--black);
+}
+
+/* ── Cards ── */
+.card {
+  background: var(--charcoal-2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  overflow: visible;
+}
+
+.card-header {
+  padding: 10px 14px;
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-secondary);
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-family: var(--font);
+}
+
+.card-body {
+  padding: 14px;
+}
+
+/* ── URL Input ── */
+.url-row {
+  display: flex;
+  gap: 0;
+}
+
+.url-row input {
+  flex: 1;
+  padding: 10px 12px;
+  background: var(--charcoal-3);
+  border: 1px solid var(--border);
+  border-right: none;
+  color: var(--text-primary);
+  font-family: var(--font);
+  font-size: 12px;
+  outline: none;
+  transition: border-color 0.15s;
+}
+
+.url-row input:focus { border-color: var(--accent); }
+.url-row input::placeholder { color: var(--text-muted); }
+
+.url-row .btn {
+  border-radius: 0;
+  white-space: nowrap;
+}
+
+/* ── Tags ── */
+.tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-top: 10px;
+}
+
+.tag {
+  font-size: 10px;
+  padding: 2px 8px;
+  background: var(--charcoal-4);
+  border: 1px solid var(--border);
+  color: var(--text-muted);
+  font-family: var(--font);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+/* ── Video Info ── */
+.vinfo {
+  display: none;
+  gap: 12px;
+  padding: 12px;
+  background: var(--charcoal-2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  align-items: center;
+}
+
+.vinfo.visible { display: flex; }
+
+.vinfo-thumb {
+  width: 56px;
+  height: 56px;
+  background: var(--charcoal-4);
+  border: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 22px;
+  flex-shrink: 0;
+  overflow: hidden;
+}
+
+.vinfo-thumb img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.vinfo-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.vinfo-sub {
+  font-size: 11px;
+  color: var(--text-muted);
+  font-family: var(--font);
+  margin-top: 2px;
+}
+
+/* ── Main Tabs ── */
+.main-tabs {
+  display: flex;
+  gap: 2px;
+  margin-bottom: 20px;
+  border-bottom: 1px solid var(--border);
+}
+.main-tab {
+  padding: 8px 20px;
+  font-size: 12px;
+  font-weight: 600;
+  font-family: var(--font);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  background: transparent;
+  border: none;
+  color: var(--text-muted);
+  cursor: pointer;
+  border-bottom: 2px solid transparent;
+  margin-bottom: -1px;
+  transition: all 0.15s;
+}
+.main-tab:hover { color: var(--text-primary); }
+.main-tab.active { color: var(--accent); border-bottom-color: var(--accent); }
+.main-tab-content { display: none; }
+.main-tab-content[style*="block"] { display: block; }
+
+/* ── Settings Modal ── */
+.settings-modal { max-width: 560px; }
+.settings-tabs {
+  display: flex;
+  gap: 2px;
+  margin-bottom: 20px;
+  border-bottom: 1px solid var(--border);
+}
+.settings-tab {
+  padding: 6px 16px;
+  font-size: 11px;
+  font-weight: 600;
+  font-family: var(--font);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  background: transparent;
+  border: none;
+  color: var(--text-muted);
+  cursor: pointer;
+  border-bottom: 2px solid transparent;
+  margin-bottom: -1px;
+  transition: all 0.15s;
+}
+.settings-tab:hover { color: var(--text-primary); }
+.settings-tab.active { color: var(--accent); border-bottom-color: var(--accent); }
+.settings-section { display: none; }
+.settings-section.active { display: block; }
+
+/* ── Progress Section ── */
+.progress-section {
+  display: none;
+  background: var(--charcoal-2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 16px;
+}
+
+.progress-section.visible { display: block; }
+
+.progress-big-text {
+  font-family: var(--font);
+  font-size: 42px;
+  font-weight: 700;
+  line-height: 1;
+  margin-bottom: 12px;
+  display: flex;
+  align-items: baseline;
+  gap: 2px;
+}
+
+.progress-big-text .pct { color: var(--text-primary); }
+.progress-big-text .of {
+  font-size: 18px;
+  color: var(--text-muted);
+  font-weight: 400;
+}
+
+.progress-bar-wrap {
+  height: 3px;
+  background: var(--charcoal-5);
+  border-radius: 0;
+  overflow: hidden;
+  margin-bottom: 10px;
+}
+
+.progress-bar-fill {
+  height: 100%;
+  background: var(--accent);
+  width: 0%;
+  transition: width 0.4s ease;
+}
+
+.progress-status {
+  font-size: 12px;
+  color: var(--text-secondary);
+  font-family: var(--font);
+  margin-bottom: 12px;
+}
+
+.progress-time-row {
+  display: flex;
+  justify-content: space-between;
+  font-size: 11px;
+  color: var(--text-muted);
+  font-family: var(--font);
+  margin-bottom: 14px;
+}
+
+/* ── Steps ── */
+.steps {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin-top: 8px;
+}
+
+.step {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 10px;
+  border-radius: var(--radius);
+  transition: background 0.15s;
+}
+
+.step.active { background: var(--accent-glow); }
+.step.done { opacity: 0.6; }
+
+.step-icon {
+  width: 22px;
+  height: 22px;
+  background: var(--charcoal-5);
+  border: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 10px;
+  font-weight: 700;
+  color: var(--text-muted);
+  font-family: var(--font);
+  flex-shrink: 0;
+}
+
+.step.active .step-icon {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #fff;
+}
+
+.step.done .step-icon {
+  background: var(--green-dim);
+  border-color: var(--green);
+  color: var(--green);
+}
+
+.step-label {
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--text-secondary);
+  flex: 1;
+}
+
+.step.active .step-label { color: var(--text-primary); }
+
+.step-detail {
+  font-size: 10px;
+  color: var(--text-muted);
+  font-family: var(--font);
+}
+
+.step-pct {
+  font-size: 11px;
+  color: var(--text-muted);
+  font-family: var(--font);
+  min-width: 30px;
+  text-align: right;
+}
+
+/* ── Platform Grid ── */
+.platform-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px;
+}
+
+.platform-card {
+  padding: 12px 10px;
+  background: var(--charcoal-3);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  cursor: pointer;
+  text-align: center;
+  transition: all 0.15s;
+}
+
+.platform-card:hover { border-color: var(--border-light); background: var(--charcoal-4); }
+.platform-card.selected { border-color: var(--accent); background: var(--accent-dim); }
+
+.platform-card .pe { font-size: 18px; margin-bottom: 4px; }
+.platform-card .pn { font-size: 11px; font-weight: 600; color: var(--text-primary); }
+.platform-card .ps { font-size: 9px; color: var(--text-muted); font-family: var(--font); margin-top: 2px; }
+
+/* ── Options ── */
+.opt-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 0;
+  border-bottom: 1px solid var(--border);
+}
+
+.opt-row:last-child { border-bottom: none; }
+
+.opt-label {
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--text-primary);
+}
+
+.opt-hint {
+  font-size: 10px;
+  color: var(--text-muted);
+  font-family: var(--font);
+  margin-top: 1px;
+}
+
+/* ── Toggle ── */
+.tog { position: relative; display: inline-block; cursor: pointer; }
+.tog input { display: none; }
+.tog-s {
+  display: block;
+  width: 36px;
+  height: 20px;
+  background: var(--charcoal-5);
+  border: 1px solid var(--border);
+  border-radius: 0;
+  transition: all 0.15s;
+  position: relative;
+}
+.tog-s::after {
+  content: '';
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 14px;
+  height: 14px;
+  background: var(--text-muted);
+  border-radius: 0;
+  transition: all 0.15s;
+}
+.tog input:checked + .tog-s {
+  background: var(--accent-dim);
+  border-color: var(--accent);
+}
+.tog input:checked + .tog-s::after {
+  left: 18px;
+  background: var(--accent);
+}
+
+/* ── Select ── */
+select {
+  padding: 6px 10px;
+  background: var(--charcoal-3);
+  border: 1px solid var(--border);
+  color: var(--text-primary);
+  font-family: var(--font);
+  font-size: 11px;
+  outline: none;
+  border-radius: 0;
+  cursor: pointer;
+  appearance: none;
+  -webkit-appearance: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M0 0l5 6 5-6z' fill='%23555'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 8px center;
+  padding-right: 24px;
+}
+
+select:focus { border-color: var(--accent); }
+
+/* ── Buttons ── */
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 8px 16px;
+  font-size: 12px;
+  font-weight: 600;
+  font-family: var(--font);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  cursor: pointer;
+  transition: all 0.15s;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  background: var(--charcoal-3);
+  color: var(--text-primary);
+  text-decoration: none;
+  white-space: nowrap;
+}
+
+.btn:hover { background: var(--charcoal-4); border-color: var(--border-light); }
+.btn:active { transform: translateY(1px); }
+.btn:disabled { opacity: 0.3; cursor: not-allowed; pointer-events: none; }
+
+.btn-primary {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #fff;
+}
+.btn-primary:hover { background: #9333ea; border-color: #9333ea; }
+
+.btn-ghost {
+  background: transparent;
+  border-color: transparent;
+  color: var(--text-secondary);
+}
+.btn-ghost:hover { background: var(--charcoal-3); color: var(--text-primary); }
+
+.btn-sm { padding: 5px 10px; font-size: 10px; }
+.btn-lg { padding: 12px 24px; font-size: 13px; }
+
+.btn-hot {
+  background: var(--hot-dim);
+  border-color: var(--hot);
+  color: var(--hot);
+}
+.btn-hot:hover { background: var(--hot); color: #fff; }
+
+/* ── Log ── */
+.log {
+  max-height: 120px;
+  overflow-y: auto;
+  font-family: var(--font);
+  font-size: 11px;
+  line-height: 1.8;
+}
+
+.log-entry {
+  padding: 2px 0;
+  color: var(--text-muted);
+  border-bottom: 1px solid var(--charcoal-3);
+}
+
+.log-entry:last-child { border-bottom: none; }
+.log-entry.info { color: var(--text-secondary); }
+.log-entry.ok { color: var(--green); }
+.log-entry.err { color: var(--red); }
+.log-entry.warn { color: var(--yellow); }
+
+.log-time {
+  color: var(--text-muted);
+  margin-right: 8px;
+  font-size: 10px;
+}
+
+/* ── Clips Section ── */
+.clips-section { display: none; }
+.clips-section.visible { display: block; }
+
+.clips-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 20px;
+}
+
+.clips-title {
+  font-family: var(--font);
+  font-size: 18px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+}
+
+.clips-count {
+  font-size: 12px;
+  color: var(--text-muted);
+  font-family: var(--font);
+  background: var(--charcoal-3);
+  padding: 3px 10px;
+  border: 1px solid var(--border);
+}
+
+/* ── Clip Grid ── */
+.clips-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 12px;
+}
+
+.clip-card {
+  background: var(--charcoal-2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  overflow: hidden;
+  transition: border-color 0.15s;
+}
+
+.clip-card:hover { border-color: var(--border-light); }
+
+.clip-preview {
+  position: relative;
+  aspect-ratio: 9/16;
+  background: var(--charcoal-3);
+  cursor: pointer;
+  overflow: hidden;
+  max-height: 220px;
+}
+
+.clip-preview video {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.clip-badge {
+  position: absolute;
+  bottom: 8px;
+  left: 8px;
+  padding: 3px 8px;
+  background: rgba(0,0,0,0.8);
+  border: 1px solid var(--border);
+  font-size: 10px;
+  font-family: var(--font);
+  color: var(--text-secondary);
+  backdrop-filter: blur(4px);
+  z-index: 2;
+}
+
+.viral-badge {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  padding: 4px 10px;
+  font-family: var(--font);
+  font-size: 14px;
+  font-weight: 700;
+  border: 1px solid;
+  z-index: 2;
+}
+
+.viral-badge.vl { background: var(--red-dim); border-color: var(--red); color: var(--red); }
+.viral-badge.vm { background: var(--yellow-dim); border-color: var(--yellow); color: var(--yellow); }
+.viral-badge.vh { background: var(--green-dim); border-color: var(--green); color: var(--green); }
+
+.clip-upload-hud {
+  position: absolute;
+  top: 8px;
+  left: 8px;
+  display: flex;
+  gap: 4px;
+  opacity: 0;
+  transition: opacity 0.15s;
+}
+
+.clip-card:hover .clip-upload-hud { opacity: 1; }
+
+.clip-upload-btn {
+  width: 30px;
+  height: 30px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0,0,0,0.8);
+  border: 1px solid var(--border);
+  color: var(--text-primary);
+  font-size: 12px;
+  cursor: pointer;
+  transition: all 0.15s;
+  backdrop-filter: blur(4px);
+}
+
+.clip-upload-btn:hover { background: var(--charcoal-5); border-color: var(--border-light); }
+.clip-upload-btn.yt:hover { background: #ff0000; border-color: #ff0000; }
+.clip-upload-btn.tt:hover { background: #ff0022; border-color: #ff0022; }
+.clip-upload-btn.dl:hover { background: var(--blue); border-color: var(--blue); }
+
+.clip-info { padding: 12px; }
+
+.clip-time {
+  font-size: 11px;
+  color: var(--text-muted);
+  font-family: var(--font);
+  margin-bottom: 8px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.hot-badge {
+  font-size: 10px;
+  color: var(--hot);
+  font-weight: 700;
+  font-family: var(--font);
+  background: var(--hot-dim);
+  padding: 1px 6px;
+  border: 1px solid rgba(249,115,22,0.3);
+}
+
+.chap-badge {
+  font-size: 10px;
+  color: var(--accent);
+  font-weight: 600;
+  font-family: var(--font);
+  background: var(--accent-glow);
+  padding: 1px 6px;
+  border: 1px solid rgba(168,85,247,0.3);
+}
+
+.virality-breakdown {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-bottom: 8px;
+}
+
+.vir-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.vir-label {
+  font-size: 10px;
+  color: var(--text-muted);
+  font-family: var(--font);
+  width: 40px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.vir-bar {
+  flex: 1;
+  height: 3px;
+  background: var(--charcoal-5);
+  border-radius: 0;
+  overflow: hidden;
+}
+
+.vir-fill {
+  height: 100%;
+  border-radius: 0;
+  transition: width 0.3s ease;
+}
+
+.vir-val {
+  font-size: 10px;
+  color: var(--text-muted);
+  font-family: var(--font);
+  width: 24px;
+  text-align: right;
+}
+
+
+
+.clip-text {
+  font-size: 11px;
+  color: var(--text-muted);
+  line-height: 1.5;
+  margin-bottom: 10px;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.clip-actions {
+  display: flex;
+  gap: 4px;
+}
+
+/* ── Timeline ── */
+.timeline-wrap {
+  margin-top: 24px;
+  padding: 16px;
+  background: var(--charcoal-2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+}
+
+.timeline-track {
+  height: 6px;
+  background: var(--charcoal-4);
+  border-radius: 0;
+  position: relative;
+  margin: 12px 0;
+}
+
+.timeline-clip {
+  position: absolute;
+  top: 0;
+  height: 100%;
+  border-radius: 0;
+  opacity: 0.7;
+  cursor: pointer;
+  transition: opacity 0.15s;
+}
+
+.timeline-clip:hover { opacity: 1; }
+
+/* ── Upload Section ── */
+.upload-section {
+  display: none;
+  margin-top: 24px;
+  padding: 20px;
+  background: var(--charcoal-2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+}
+
+.upload-section.visible { display: block; }
+
+.upload-meta {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.upload-meta label {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  font-family: var(--font);
+  margin-bottom: 2px;
+  display: block;
+}
+
+.upload-meta input[type="text"],
+.upload-meta textarea {
+  width: 100%;
+  padding: 10px 12px;
+  background: var(--charcoal-3);
+  border: 1px solid var(--border);
+  color: var(--text-primary);
+  font-family: var(--font);
+  font-size: 12px;
+  outline: none;
+  resize: none;
+}
+
+.upload-meta input:focus,
+.upload-meta textarea:focus { border-color: var(--accent); }
+
+/* ── Batch Upload ── */
+.batch-upload-section {
+  display: none;
+  margin-top: 20px;
+  padding: 16px;
+  background: var(--charcoal-2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+}
+
+.batch-upload-section.visible { display: block; }
+
+.batch-progress-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 0;
+  border-bottom: 1px solid var(--border);
+  font-family: var(--font);
+  font-size: 11px;
+}
+
+.batch-progress-item:last-child { border-bottom: none; }
+
+.batch-status-icon { font-size: 14px; }
+.batch-clip-name { flex: 1; color: var(--text-secondary); }
+.batch-stage { color: var(--text-muted); font-size: 10px; }
+
+/* ── Empty State ── */
+.empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 80px 20px;
+  text-align: center;
+}
+
+.empty-icon {
+  font-size: 48px;
+  margin-bottom: 16px;
+  opacity: 0.3;
+}
+
+.empty-title {
+  font-family: var(--font);
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--text-secondary);
+  margin-bottom: 6px;
+}
+
+.empty-hint {
+  font-size: 12px;
+  color: var(--text-muted);
+  max-width: 300px;
+}
+
+/* ── Modal ── */
+.modal-overlay {
+  display: none;
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.85);
+  z-index: 100;
+  align-items: center;
+  justify-content: center;
+  backdrop-filter: blur(4px);
+}
+
+.modal-overlay.visible { display: flex; }
+
+.modal {
+  background: var(--charcoal-2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  max-width: 900px;
+  width: 95%;
+  max-height: 90vh;
+  overflow-y: auto;
+}
+
+.modal-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 18px;
+  border-bottom: 1px solid var(--border);
+}
+
+.modal-title {
+  font-family: var(--font);
+  font-size: 13px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+.modal-x {
+  background: none;
+  border: none;
+  color: var(--text-muted);
+  font-size: 18px;
+  cursor: pointer;
+  padding: 4px;
+  line-height: 1;
+}
+
+.modal-x:hover { color: var(--text-primary); }
+
+.modal-body { padding: 18px; }
+
+/* ── Settings Modal ── */
+.settings-modal { max-width: 540px; }
+
+/* ── Main Tabs ── */
+.main-tabs {
+  display: flex;
+  gap: 2px;
+  margin-bottom: 20px;
+  border-bottom: 1px solid var(--border);
+  padding-bottom: 0;
+}
+
+.main-tab {
+  padding: 10px 20px;
+  background: transparent;
+  border: none;
+  border-bottom: 2px solid transparent;
+  color: var(--text-muted);
+  font-family: var(--font);
+  font-size: 12px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  cursor: pointer;
+  transition: all 0.15s;
+  margin-bottom: -1px;
+}
+
+.main-tab:hover { color: var(--text-primary); }
+.main-tab.active { color: var(--accent); border-bottom-color: var(--accent); }
+
+.settings-tabs {
+  display: flex;
+  gap: 2px;
+  margin-bottom: 16px;
+  border-bottom: 1px solid var(--border);
+  padding-bottom: 12px;
+}
+
+/* ── Clip Caption Box ── */
+.clip-caption-box {
+  margin-top: 6px;
+  padding: 8px 10px;
+  background: var(--charcoal-3);
+  border: 1px solid var(--border);
+  transition: border-color 0.15s;
+  position: relative;
+}
+.clip-caption-box:hover {
+  border-color: var(--accent);
+}
+.clip-caption-box:hover .clip-copy-btn {
+  opacity: 1;
+}
+.clip-copy-btn {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  width: 22px;
+  height: 22px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--charcoal-5);
+  border: 1px solid var(--border);
+  font-size: 10px;
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity 0.15s;
+  z-index: 2;
+}
+.clip-copy-btn:hover {
+  background: var(--accent);
+  border-color: var(--accent);
+}
+.clip-caption-text {
+  font-size: 11px;
+  line-height: 1.4;
+  color: var(--text-secondary);
+  padding-right: 20px;
+}
+.clip-hashtags {
+  font-size: 10px;
+  font-family: var(--font);
+  color: var(--accent);
+  margin-top: 4px;
+  word-break: break-all;
+  padding-right: 20px;
+}
+
+.settings-tab {
+  padding: 6px 14px;
+  font-size: 11px;
+  font-weight: 600;
+  font-family: var(--font);
+  color: var(--text-muted);
+  cursor: pointer;
+  border: none;
+  background: transparent;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  transition: all 0.15s;
+}
+
+.settings-tab:hover { color: var(--text-primary); }
+.settings-tab.active { color: var(--accent); border-bottom: 1px solid var(--accent); }
+
+.settings-section { display: none; }
+.settings-section.active { display: block; }
+
+.settings-step {
+  display: flex;
+  gap: 12px;
+  padding: 12px;
+  background: var(--charcoal-3);
+  border: 1px solid var(--border);
+  margin-bottom: 8px;
+}
+
+.settings-step-num {
+  width: 24px;
+  height: 24px;
+  background: var(--accent);
+  color: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 11px;
+  font-weight: 700;
+  font-family: var(--font);
+  flex-shrink: 0;
+}
+
+.settings-step-title { font-size: 12px; font-weight: 600; margin-bottom: 2px; }
+.settings-step-desc { font-size: 11px; color: var(--text-muted); line-height: 1.5; }
+
+
+.dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 0;
+  background: var(--text-muted);
+}
+
+.dot.connected { background: var(--green); }
+.dot.disconnected { background: var(--red); }
+
+/* ── Modal ── */
+.modal-overlay {
+  display: none;
+  position: fixed;
+  top: 0; left: 0; right: 0; bottom: 0;
+  background: rgba(0,0,0,0.8);
+  z-index: 100;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+}
+.modal-overlay.visible { display: flex; }
+.modal {
+  background: var(--charcoal-1);
+  border: 1px solid var(--border);
+  width: 100%;
+  max-width: 480px;
+  max-height: 80vh;
+  display: flex;
+  flex-direction: column;
+}
+.modal-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 18px;
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+}
+.modal-title {
+  font-family: var(--font);
+  font-size: 13px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-primary);
+}
+.modal-x {
+  background: none;
+  border: none;
+  color: var(--text-muted);
+  font-size: 18px;
+  cursor: pointer;
+  padding: 0 4px;
+  line-height: 1;
+}
+.modal-x:hover { color: var(--text-primary); }
+.modal-body {
+  padding: 18px;
+  overflow-y: auto;
+  flex: 1;
+}
+
+/* ── Toast ── */
+.toast-container {
+  position: fixed;
+  bottom: 20px;
+  right: 20px;
+  z-index: 200;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.toast {
+  padding: 10px 16px;
+  background: var(--charcoal-2);
+  border: 1px solid var(--border);
+  font-size: 12px;
+  font-family: var(--font);
+  color: var(--text-primary);
+  animation: toast-in 0.2s ease;
+  max-width: 320px;
+}
+
+.toast.err { border-color: var(--red); color: var(--red); }
+.toast.ok { border-color: var(--green); color: var(--green); }
+.toast.warn { border-color: var(--yellow); color: var(--yellow); }
+
+@keyframes toast-in {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+/* ── Responsive ── */
+@media (max-width: 900px) {
+  .app { grid-template-columns: 1fr; grid-template-rows: 48px auto 1fr; min-height: 100vh; }
+  .sidebar { border-right: none; border-bottom: 1px solid var(--border); height: auto; max-height: 40vh; position: static; }
+  .main { height: auto; overflow-y: visible; }
+  .clips-grid { grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); }
+}
+
+/* ── Utility ── */
+.hidden { display: none !important; }
+.flex { display: flex; }
+.flex-1 { flex: 1; }
+.gap-4 { gap: 4px; }
+.gap-8 { gap: 8px; }
+.items-center { align-items: center; }
+.justify-between { justify-content: space-between; }
+.mt-8 { margin-top: 8px; }
+.mt-16 { margin-top: 16px; }
+.mb-8 { margin-bottom: 8px; }
+.text-muted { color: var(--text-muted); }
+.text-sm { font-size: 11px; }
+.font-mono { font-family: var(--font); }
+
+/* ── Bulk Upload ── */
+.bulk-file-status { font-size: 11px; }
+#bulkFileList { border: 1px solid var(--border); padding: 4px 6px; background: var(--charcoal-3); }
+#bulkFileList:empty { display: none; }
+#bulkStatus { min-height: 16px; }
+</style>
+</head>
+<body>
+
+
+<!-- Toast Container -->
+<div class="toast-container" id="toastContainer"></div>
+
+<div class="app">
+
+  <!-- ── Header ── -->
+  <header>
+    <div class="logo">
+      <div class="logo-mark">✂</div>
+      <span>AI Clipper</span>
+      <span class="logo-version">v2.0</span>
+    </div>
+    <div class="header-status">
+      <div class="status-dot" id="statusDot"></div>
+      <span class="status-text" id="statusText">Ready</span>
+    </div>
+  </header>
+
+  <!-- ── Sidebar ── -->
+  <div class="sidebar">
+
+    <!-- URL Input -->
+    <div class="card">
+      <div class="card-header">Source</div>
+      <div class="card-body" style="padding:10px;">
+        <div class="url-row">
+          <input type="url" id="urlInput" placeholder="Paste video URL…" />
+          <button class="btn btn-primary" id="loadBtn" onclick="loadVideo()">Load</button>
+        </div>
+        <div class="tags">
+          <span class="tag">YouTube</span>
+          <span class="tag">Twitch</span>
+          <span class="tag">Twitter</span>
+          <span class="tag">TikTok</span>
+          <span class="tag">Vimeo</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Bulk File Upload -->
+    <div class="card">
+      <div class="card-header">Bulk Upload</div>
+      <div class="card-body" style="padding:10px;">
+        <div style="font-size:11px;color:var(--text-muted);margin-bottom:6px;line-height:1.4;">Upload multiple video files directly. They'll be processed as individual jobs — get captions, clips, and download.</div>
+        <input type="file" id="bulkFileInput" multiple accept="video/*" style="display:none;" onchange="handleBulkFiles(this.files)" />
+        <button class="btn btn-ghost btn-sm" onclick="document.getElementById('bulkFileInput').click()" style="width:100%;margin-bottom:6px;">📁 Choose Files</button>
+        <div id="bulkFileList" style="max-height:120px;overflow-y:auto;margin-bottom:6px;"></div>
+        <button class="btn btn-primary btn-sm" id="bulkUploadBtn" onclick="startBulkUpload()" style="width:100%;" disabled>Upload All</button>
+        <div id="bulkStatus" style="font-size:11px;color:var(--text-muted);margin-top:4px;font-family:var(--font);"></div>
+      </div>
+    </div>
+
+    <!-- Video Info -->
+    <div class="vinfo" id="vinfo">
+      <div class="vinfo-thumb" id="vinfoThumb"></div>
+      <div class="vinfo-meta" style="flex:1;min-width:0;">
+        <div class="vinfo-title" id="vinfoTitle">—</div>
+        <div class="vinfo-sub" id="vinfoSub">—</div>
+      </div>
+    </div>
+
+
+    <!-- Platform -->
+    <div class="card">
+      <div class="card-header">Platform</div>
+      <div class="card-body">
+        <div class="platform-grid">
+          <div class="platform-card selected" data-p="tiktok" onclick="selPlatform('tiktok')">
+            <div class="pe">♪</div><div class="pn">TikTok</div><div class="ps">1080×1920 · 60s</div>
+          </div>
+          <div class="platform-card" data-p="youtube_short" onclick="selPlatform('youtube_short')">
+            <div class="pe">▶</div><div class="pn">YT Shorts</div><div class="ps">1080×1920 · 60s</div>
+          </div>
+          <div class="platform-card" data-p="instagram_reel" onclick="selPlatform('instagram_reel')">
+            <div class="pe">◎</div><div class="pn">IG Reels</div><div class="ps">1080×1920 · 90s</div>
+          </div>
+          <div class="platform-card" data-p="twitter" onclick="selPlatform('twitter')">
+            <div class="pe">𝕏</div><div class="pn">X / Twitter</div><div class="ps">720×1280 · 140s</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Options -->
+    <div class="card">
+      <div class="card-header">Options</div>
+      <div class="card-body">
+        <div class="opt-row">
+          <div><div class="opt-label">Auto Captions</div><div class="opt-hint">Burn animated subtitles</div></div>
+          <label class="tog"><input type="checkbox" id="oCaptions" checked /><span class="tog-s"></span></label>
+        </div>
+        <div class="opt-row">
+          <div><div class="opt-label">Face-Aware Crop</div><div class="opt-hint">Keep faces centered</div></div>
+          <label class="tog"><input type="checkbox" id="oFace" /><span class="tog-s"></span></label>
+        </div>
+        <div class="opt-row">
+          <div class="opt-label">Caption Style</div>
+          <select id="oCapStyle" style="width:130px;">
+            <option value="default">Default</option>
+            <option value="tiktok">TikTok</option>
+            <option value="hormozi">Hormozi</option>
+            <option value="mrbeast">MrBeast</option>
+            <option value="neon">Neon</option>
+            <option value="minimal">Minimal</option>
+            <option value="podcast">Podcast</option>
+            <option value="bold">Bold</option>
+          </select>
+        </div>
+        <div class="opt-row">
+          <div class="opt-label">Clips</div>
+          <select id="oNumClips" style="width:70px;" onchange="updateEstimate()">
+            <option value="3">3</option>
+            <option value="5" selected>5</option>
+            <option value="8">8</option>
+            <option value="10">10</option>
+            <option value="15">15</option>
+            <option value="20">20</option>
+          </select>
+        </div>
+        <div class="opt-row">
+          <div><div class="opt-label">Whisper Model</div><div class="opt-hint">base=fast, small=accurate</div></div>
+          <select id="oWhisper" style="width:90px;" onchange="updateEstimate()">
+            <option value="tiny">tiny</option>
+            <option value="base" selected>base</option>
+            <option value="small">small</option>
+            <option value="medium">medium</option>
+          </select>
+        </div>
+       <div class="opt-row">
+         <div><div class="opt-label">AI Analysis</div><div class="opt-hint">Chapters + hot take scoring</div></div>
+          <label class="tog"><input type="checkbox" id="oOllama" checked onchange="toggleOllamaStatus()"/><span class="tog-s"></span></label>
+        </div>
+        <div class="opt-row" id="ollamaStatusRow" style="display:flex;">
+         <div style="display:flex;align-items:center;gap:6px;">
+           <span class="status-dot" id="ollamaDot" style="background:var(--text-muted);animation:none;"></span>
+           <span style="font-size:10px;color:var(--text-muted);font-family:var(--font);" id="ollamaStatusText">Checking…</span>
+         </div>
+         <button class="btn btn-sm" onclick="testOllama()" style="font-size:10px;padding:2px 8px;">Test</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Log -->
+    <div class="card" style="flex:1;min-height:60px;">
+      <div class="card-header">Log</div>
+      <div class="card-body" style="padding:8px 12px;">
+        <div class="log" id="logEntries"></div>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- ── Main Content ── -->
+  <div class="main">
+
+    <!-- Main Tabs -->
+    <div class="main-tabs">
+      <button class="main-tab active" onclick="switchMainTab('tasks')" id="tabTasks">Tasks</button>
+      <button class="main-tab" onclick="switchMainTab('clips')" id="tabClips">Clips</button>
+    </div>
+
+    <!-- ── Tasks Tab ── -->
+    <div class="main-tab-content" id="tabContentTasks">
+
+    <!-- Progress Section -->
+    <div class="card" style="margin-bottom:16px;">
+      <div class="card-header">Progress</div>
+      <div class="card-body">
+        <div class="progress-big-text">
+          <span class="pct" id="bigPct">0</span><span class="of">%</span>
+        </div>
+        <div class="progress-bar-wrap">
+          <div class="progress-bar-fill" id="bigBar"></div>
+        </div>
+        <div class="progress-status" id="bigStatus">Ready — paste a URL to begin</div>
+        <div class="progress-time-row">
+          <span id="timeElapsed">0:00</span>
+          <span id="timeEstimate">Est. —</span>
+        </div>
+        <div style="display:flex;gap:6px;margin-top:12px;">
+          <button class="btn btn-primary btn-lg" id="genBtn" style="flex:1;" onclick="generateClips()" disabled>
+            Generate Clips
+          </button>
+          <button class="btn btn-ghost" id="cancelBtn" style="display:none;padding:12px 16px;" onclick="cancelJob()">
+            Cancel
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Steps -->
+    <div class="card" style="margin-bottom:16px;">
+      <div class="card-header">Pipeline Steps</div>
+      <div class="card-body">
+        <div class="steps" id="steps">
+          <div class="step" id="s1">
+            <div class="step-icon">1</div>
+            <div class="step-body">
+              <div class="step-label">Download</div>
+              <div class="step-detail" id="s1d">Waiting</div>
+            </div>
+            <div class="step-pct" id="s1p"></div>
+          </div>
+          <div class="step" id="s2">
+            <div class="step-icon">2</div>
+            <div class="step-body">
+              <div class="step-label">Transcribe & Audio</div>
+              <div class="step-detail" id="s2d">Waiting</div>
+            </div>
+            <div class="step-pct" id="s2p"></div>
+          </div>
+          <div class="step" id="s3">
+            <div class="step-icon">3</div>
+            <div class="step-body">
+              <div class="step-label">AI Analysis</div>
+              <div class="step-detail" id="s3d">Waiting</div>
+            </div>
+            <div class="step-pct" id="s3p"></div>
+          </div>
+          <div class="step" id="s4">
+            <div class="step-icon">4</div>
+            <div class="step-body">
+              <div class="step-label">Render Clips</div>
+              <div class="step-detail" id="s4d">Waiting</div>
+            </div>
+            <div class="step-pct" id="s4p"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    </div><!-- end tabContentTasks -->
+
+    <!-- ── Clips Tab ── -->
+    <div class="main-tab-content" id="tabContentClips" style="display:none;">
+    <div class="empty" id="empty">
+      <div class="empty-icon">✂</div>
+      <div class="empty-title">No clips yet</div>
+      <div class="empty-hint">Paste a video URL and generate clips to get started.</div>
+    </div>
+
+    <!-- Clips Section -->
+    <div class="clips-section" id="clipsSection">
+      <div class="clips-header">
+        <div>
+          <div class="clips-title">Generated Clips</div>
+          <div class="clips-count" id="clipCount">0 clips</div>
+        </div>
+        <div style="display:flex;gap:6px;">
+          <button class="btn btn-sm" onclick="regenerateAllCaptions()">🔄 Regenerate Captions</button>
+          <button class="btn btn-sm" onclick="copyAllCaptions()">📋 Copy All Captions</button>
+          <button class="btn btn-sm" onclick="downloadAllClips()">↓ Download All</button>
+        </div>
+      </div>
+
+      <!-- Chapters -->
+      <div id="chaptersSection" style="display:none;margin-bottom:20px;">
+        <div style="font-family:var(--font);font-size:11px;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.06em;margin-bottom:8px;">Chapters</div>
+        <div id="chaptersList" style="display:flex;gap:6px;flex-wrap:wrap;"></div>
+      </div>
+
+      <div class="clips-grid" id="clipsGrid"></div>
+
+      <!-- Timeline -->
+      <div class="timeline-wrap" id="timelineWrap" style="display:none;">
+        <div style="font-family:var(--font);font-size:11px;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.06em;margin-bottom:8px;">Timeline</div>
+        <div class="timeline-track" id="timelineTrack"></div>
+        <div style="display:flex;justify-content:space-between;font-size:10px;color:var(--text-muted);font-family:var(--font);">
+          <span id="timelineStart">0:00</span>
+          <span id="timelineDuration">0:00</span>
+        </div>
+      </div>
+    </div>
+
+    </div><!-- end tabContentClips -->
+  </div><!-- end main -->
+</div><!-- end app -->
+
+<!-- Preview Modal -->
+<div class="modal-overlay" id="previewModal">
+  <div class="modal" style="max-width:420px;">
+    <div class="modal-head">
+      <div class="modal-title">Preview</div>
+      <button class="modal-x" onclick="closePreview()">×</button>
+    </div>
+    <div class="modal-body" style="padding:0;">
+      <video id="prevVideo" controls style="width:100%;background:#000;max-height:70vh;"></video>
+    </div>
+  </div>
+</div>
+
+<!-- Settings Modal -->
+<div class="modal-overlay" id="settingsModal">
+  <div class="modal settings-modal">
+    <div class="modal-head">
+      <div class="modal-title">Settings</div>
+      <button class="modal-x" onclick="closeSettings()">×</button>
+    </div>
+    <div class="modal-body">
+     <div class="settings-tabs">
+        <button class="settings-tab" onclick="switchSettingsTab('ai')">AI</button>
+       <button class="settings-tab" onclick="switchSettingsTab('general')">General</button>
+     </div>
+      <!-- AI / Ollama Tab -->
+      <div class="settings-section" id="secAi">
+        <div class="settings-step">
+          <div class="settings-step-num">1</div>
+          <div style="flex:1;">
+            <div class="settings-step-title">Ollama Endpoint</div>
+            <div class="settings-step-desc">URL where Ollama is running. Default: <code style="background:var(--charcoal-3);padding:1px 6px;font-size:11px;">http://localhost:11434</code></div>
+            <div style="margin-top:8px;display:flex;gap:6px;align-items:center;">
+              <input type="text" id="ollamaUrl" value="http://localhost:11434" placeholder="http://localhost:11434" style="flex:1;background:var(--charcoal-3);border:1px solid var(--border);color:var(--text-primary);padding:6px 10px;font-size:12px;font-family:var(--font);outline:none;" />
+            </div>
+          </div>
+        </div>
+        <div class="settings-step">
+          <div class="settings-step-num">2</div>
+          <div style="flex:1;">
+            <div class="settings-step-title">Model</div>
+            <div class="settings-step-desc">LLM model for chapter detection & hot take scoring. Install with: <code style="background:var(--charcoal-3);padding:1px 6px;font-size:11px;">ollama pull llama3.1:8b</code></div>
+            <div style="margin-top:8px;display:flex;gap:6px;align-items:center;">
+              <input type="text" id="ollamaModel" value="llama3.1:8b" placeholder="llama3.1:8b" style="flex:1;background:var(--charcoal-3);border:1px solid var(--border);color:var(--text-primary);padding:6px 10px;font-size:12px;font-family:var(--font);outline:none;" />
+              <button class="btn btn-sm" onclick="ollamaListModels()" style="font-size:10px;white-space:nowrap;">List Models</button>
+            </div>
+            <div id="ollamaModelList" style="margin-top:6px;font-size:11px;color:var(--text-muted);font-family:var(--font);display:none;"></div>
+          </div>
+        </div>
+        <div class="settings-step">
+          <div class="settings-step-num">3</div>
+          <div style="flex:1;">
+            <div class="settings-step-title">Test Connection</div>
+            <div class="settings-step-desc">Verify Ollama is reachable and the model is loaded.</div>
+            <div style="margin-top:8px;display:flex;gap:6px;align-items:center;">
+              <button class="btn btn-primary btn-sm" onclick="testOllamaConnection()" style="font-size:11px;">Test Connection</button>
+              <span id="ollamaTestResult" style="font-size:11px;font-family:var(--font);"></span>
+            </div>
+          </div>
+        </div>
+        <div class="settings-step">
+          <div class="settings-step-num">4</div>
+          <div style="flex:1;">
+            <div class="settings-step-title">Features</div>
+            <div class="settings-step-desc">When AI Analysis is enabled in Options, the pipeline will:</div>
+            <div style="margin-top:6px;display:flex;flex-direction:column;gap:4px;font-size:11px;color:var(--text-secondary);font-family:var(--font);">
+              <div>📖 <strong>Chapter Detection</strong> — Auto-detect topic segments & assign chapter titles to clips</div>
+              <div>🔥 <strong>Hot Take Scoring</strong> — Rate each clip 1-10 for viral controversy potential</div>
+              <div>⚡ <strong>Fallback</strong> — Heuristic scoring when Ollama is unavailable</div>
+            </div>
+          </div>
+        </div>
+      </div>
+     <div class="settings-section" id="secGeneral">
+       <div class="settings-step">
+         <div class="settings-step-num">1</div>
+         <div>
+           <div class="settings-step-title">Ollama AI Analysis</div>
+            <div class="settings-step-desc">Configure Ollama in the AI tab. Toggle "AI Analysis" in sidebar Options to enable.</div>
+         </div>
+       </div>
+
+      </div>
+    </div>
+  </div>
+</div>
+
+
+<script>
+// ═══════════════════════════════════════════════════════════════════════════
+// STATE
+// ═══════════════════════════════════════════════════════════════════════════
+
+const S = {
+  jobId: null,
+  platform: 'tiktok',
+  videoDuration: 0,
+  clips: [],
+  highlights: [],
+  chapters: [],
+  timer: null,
+  startTime: null,
+  es: null,
+  brand: 'none',
+  currentUploadClipIndex: -1,
+};
+
+// ═══════════════════════════════════════════════════════════════════════════
+// API
+// ═══════════════════════════════════════════════════════════════════════════
+
+async function api(method, path, body) {
+  const opts = {
+    method,
+    headers: { 'Content-Type': 'application/json' },
+  };
+  if (body) opts.body = JSON.stringify(body);
+  let res;
+  try {
+    res = await fetch('/api' + path, opts);
+  } catch (e) {
+    throw new Error('Cannot reach server — is AI Clipper running? (' + e.message + ')');
+  }
+  const text = await res.text();
+  let data;
+  try { data = JSON.parse(text); } catch { data = { detail: text }; }
+  if (!res.ok) {
+    throw new Error(data.detail || data.message || ('HTTP ' + res.status));
+  }
+  return data;
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// TOAST
+// ═══════════════════════════════════════════════════════════════════════════
+
+function toast(msg, type = 'info') {
+  const c = document.getElementById('toastContainer');
+  const t = document.createElement('div');
+  t.className = `toast ${type}`;
+  t.textContent = msg;
+  c.appendChild(t);
+  setTimeout(() => t.remove(), 3500);
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// LOG
+// ═══════════════════════════════════════════════════════════════════════════
+
+function log(msg, type = 'info') {
+  const el = document.getElementById('logEntries');
+  const d = document.createElement('div');
+  d.className = `log-entry ${type}`;
+  const time = new Date().toLocaleTimeString('en-US', { hour12: false, hour: '2-digit', minute: '2-digit', second: '2-digit' });
+  d.innerHTML = `<span class="log-time">${time}</span>${msg}`;
+  el.appendChild(d);
+  el.scrollTop = el.scrollHeight;
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// STATUS
+// ═══════════════════════════════════════════════════════════════════════════
+
+function setStatus(text, ok) {
+  document.getElementById('statusText').textContent = text;
+  const dot = document.getElementById('statusDot');
+  dot.style.background = ok ? 'var(--green)' : 'var(--text-muted)';
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// URL / LOAD
+// ═══════════════════════════════════════════════════════════════════════════
+
+async function loadVideo() {
+  const url = document.getElementById('urlInput').value.trim();
+  if (!url) return toast('Paste a URL first', 'err');
+  const btn = document.getElementById('loadBtn');
+  btn.disabled = true; btn.textContent = '⏳ Loading…';
+  try {
+    const d = await api('POST', '/load', { url });
+    S.jobId = d.job_id;
+    S.videoDuration = d.duration || 0;
+    document.getElementById('vinfo').classList.add('visible');
+    document.getElementById('vinfoTitle').textContent = d.title || '—';
+    document.getElementById('vinfoSub').textContent = `⏱ ${fmtTime(d.duration || 0)} · 👤 ${d.uploader || '—'}`;
+    const thumb = document.getElementById('vinfoThumb');
+    if (d.thumbnail) {
+      thumb.innerHTML = `<img src="${d.thumbnail}" />`;
+    } else {
+      thumb.innerHTML = '▶';
+    }
+    document.getElementById('genBtn').disabled = false;
+    log(`Loaded: ${d.title}`, 'ok');
+    setStatus('Loaded', true);
+    switchMainTab('tasks');
+  } catch (e) {
+    toast(e.message, 'err');
+    log(e.message, 'err');
+  } finally {
+    btn.disabled = false; btn.textContent = 'Load';
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// PLATFORM
+// ═══════════════════════════════════════════════════════════════════════════
+
+function selPlatform(p) {
+  S.platform = p;
+  document.querySelectorAll('.platform-card').forEach(c => {
+    c.classList.toggle('selected', c.dataset.p === p);
+  });
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// GENERATE
+// ═══════════════════════════════════════════════════════════════════════════
+
+async function generateClips() {
+  if (!S.jobId) return toast('Load a video first', 'err');
+  const btn = document.getElementById('genBtn');
+  btn.disabled = true;
+  btn.textContent = '⏳ Starting…';
+  document.getElementById('cancelBtn').style.display = 'inline-flex';
+  resetSteps();
+  setProgress(0);
+  log('Starting pipeline…', 'info');
+  setStatus('Processing…', false);
+
+  S.startTime = Date.now();
+  if (S.timer) clearInterval(S.timer);
+  S.timer = setInterval(updateElapsed, 1000);
+  updateElapsed();
+
+  const opts = {
+    platform: S.platform,
+    captions: document.getElementById('oCaptions').checked,
+    face_track: document.getElementById('oFace').checked,
+    smart_crop: document.getElementById('oFace').checked,
+    caption_style: document.getElementById('oCapStyle').value,
+    num_clips: parseInt(document.getElementById('oNumClips').value),
+    whisper_model: document.getElementById('oWhisper').value,
+    brand_template: S.brand,
+    use_ollama: document.getElementById('oOllama').checked,
+    ollama_url: document.getElementById('ollamaUrl')?.value || 'http://localhost:11434',
+    ollama_model: document.getElementById('ollamaModel')?.value || 'llama3.1:8b',
+  };
+
+  try {
+    await api('POST', '/pipeline/' + S.jobId, opts);
+    connectSSE();
+  } catch (e) {
+    log('Error: ' + e.message, 'err');
+    toast(e.message, 'err');
+    btn.disabled = false;
+    btn.textContent = 'Generate Clips';
+    clearInterval(S.timer);
+  }
+}
+
+function cancelJob() {
+  log('Cancelled', 'warn');
+  setStatus('Cancelled', false);
+  if (S.es) S.es.close();
+  if (S.timer) clearInterval(S.timer);
+  const btn = document.getElementById('genBtn');
+  btn.disabled = false;
+  btn.textContent = 'Generate Clips';
+  document.getElementById('cancelBtn').style.display = 'none';
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// SSE / PROGRESS
+// ═══════════════════════════════════════════════════════════════════════════
+
+function connectSSE(cb) {
+  if (S.es) S.es.close();
+  const es = new EventSource('/api/progress/' + S.jobId);
+  S.es = es;
+  const opts = (typeof cb === 'object') ? cb : {};
+
+  es.addEventListener('update', (e) => {
+    const d = JSON.parse(e.data);
+    updateProgress(d);
+    if (d.status === 'completed' && d.highlights) {
+      if (opts.onComplete) opts.onComplete(d.highlights);
+      if (!opts.keepOpen) {
+        renderClipsFromSSE(d.highlights);
+        if (d.chapters) renderChapters(d.chapters);
+      }
+    }
+  });
+
+  es.addEventListener('error', (e) => {
+    // Try to read error from a direct fetch
+    fetch('/api/status/' + S.jobId).then(r => r.json()).then(d => {
+      if (opts.onError) opts.onError(d.error || 'Connection lost');
+    }).catch(() => {
+      if (opts.onError) opts.onError('Connection lost');
+    });
+    es.close();
+  });
+}
+
+function setProgress(pct) {
+  document.getElementById('bigPct').textContent = pct;
+  document.getElementById('bigBar').style.width = pct + '%';
+}
+
+function updateProgress(d) {
+  const pct = d.progress || 0;
+  setProgress(pct);
+  document.getElementById('bigStatus').textContent = d.message || '';
+
+  // Update steps
+  const steps = d.steps || {};
+  updateStep(1, steps.download);
+  updateStep(2, steps.transcribe);
+  updateStep(3, steps.analyze);
+  updateStep(4, steps.cut);
+}
+
+function updateStep(n, status) {
+  const el = document.getElementById('s' + n);
+  if (!el) return;
+  el.classList.remove('active', 'done');
+  if (status === 'active') el.classList.add('active');
+  else if (status === 'done') el.classList.add('done');
+  const detail = el.querySelector('.step-detail');
+  if (detail) detail.textContent = status === 'done' ? 'Done' : status === 'active' ? 'Running…' : 'Waiting';
+}
+
+function resetSteps() {
+  for (let i = 1; i <= 5; i++) {
+    const el = document.getElementById('s' + i);
+    if (el) {
+      el.classList.remove('active', 'done');
+      const detail = el.querySelector('.step-detail');
+      if (detail) detail.textContent = 'Waiting';
+    }
+  }
+}
+
+function updateElapsed() {
+  if (!S.startTime) return;
+  const elapsed = Math.floor((Date.now() - S.startTime) / 1000);
+  document.getElementById('timeElapsed').textContent = fmtTime(elapsed);
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// CLIPS
+// ═══════════════════════════════════════════════════════════════════════════
+
+function renderClipsFromSSE(highlights) {
+  const grid = document.getElementById('clipsGrid');
+  document.getElementById('clipCount').textContent = highlights.length + ' clips';
+  grid.innerHTML = '';
+  if (!S.jobId) return;
+
+  // Store highlights for upload functions
+  S.highlights = highlights;
+
+  // Show sections
+  document.getElementById('empty').style.display = 'none';
+  document.getElementById('clipsSection').classList.add('visible');
+  document.getElementById('timelineWrap').style.display = 'block';
+
+  highlights.forEach((h, i) => {
+    // Skip highlights whose clip failed to cut
+    if (!h.video_url && h.video_url !== 0) return;
+    const sc = vbClass(h.viral_score || 0);
+    const dur = (h.end - h.start) || 0;
+    h.text = h.text || '';
+    const htScore = h.hot_take_score || 0;
+    const htBadge = htScore >= 7 ? `<span class="hot-badge" title="Hot Take Score: ${htScore}/10">🔥 ${htScore}</span>` : '';
+    const chapterTitle = h.chapter_title ? `<span class="chap-badge" title="Chapter">📖 ${h.chapter_title}</span>` : '';
+    const card = document.createElement('div');
+    card.className = 'clip-card';
+    card.innerHTML = `
+      <div class="clip-preview" onclick="previewClip(${i})">
+        <video src="/api/clip/${S.jobId}/${i}" preload="metadata" muted playsinline></video>
+        <span class="clip-badge">${fmtTime(h.start)} – ${fmtTime(h.end)}</span>
+        <div class="viral-badge ${sc}">${h.viral_score || 0}</div>
+        <div class="clip-upload-hud">
+          <button class="clip-upload-btn dl" onclick="event.stopPropagation();downloadClip(${i})" title="Download">↓</button>
+        </div>
+      </div>
+      <div class="clip-info">
+        <div class="clip-time">⏱ ${fmtTime(dur)} · Hook: ${h.hook_type || 'none'}${htBadge}${chapterTitle}</div>
+        <div class="clip-caption-box" id="captionBox${i}" onclick="copyCaption(${i})" style="cursor:pointer;position:relative; margin-top: 0;" title="Click to copy caption + hashtags">
+          <button class="clip-copy-btn" onclick="event.stopPropagation();copyCaption(${i})" title="Copy caption + hashtags">📋</button>
+          <div class="clip-caption-text" id="cap${i}">${h.caption || (h.text || '').substring(0, 120)}${(h.caption||h.text||'').length > 120 ? '…' : ''}</div>
+          <div class="clip-hashtags" id="tags${i}">${(h.hashtags && h.hashtags.length > 0) ? h.hashtags.map(t => '#' + t).join(' ') : ''}</div>
+        </div>
+        <div class="virality-breakdown">
+          <div class="vir-row"><span class="vir-label">Hook</span><div class="vir-bar"><div class="vir-fill" style="width:${(h.hook_score || 0) * 100}%;background:var(--accent);"></div></div><span class="vir-val">${Math.round((h.hook_score || 0) * 100)}</span></div>
+          <div class="vir-row"><span class="vir-label">Engage</span><div class="vir-bar"><div class="vir-fill" style="width:${(h.engagement || 0) * 100}%;background:var(--green);"></div></div><span class="vir-val">${Math.round((h.engagement || 0) * 100)}</span></div>
+          <div class="vir-row"><span class="vir-label">Value</span><div class="vir-bar"><div class="vir-fill" style="width:${(h.value || 0) * 100}%;background:var(--yellow);"></div></div><span class="vir-val">${Math.round((h.value || 0) * 100)}</span></div>
+          <div class="vir-row"><span class="vir-label">Share</span><div class="vir-bar"><div class="vir-fill" style="width:${(h.shareability || 0) * 100}%;background:var(--blue);"></div></div><span class="vir-val">${Math.round((h.shareability || 0) * 100)}</span></div>
+        </div>
+        <div class="clip-actions">
+          <button class="btn btn-ghost btn-sm" onclick="previewClip(${i})">Preview</button>
+          <button class="btn btn-ghost btn-sm" onclick="regenerateCaption(${i})" title="Regenerate">🔄</button>
+          <button class="btn btn-ghost btn-sm" onclick="downloadClip(${i})">↓</button>
+        </div>
+      </div>
+    `;
+    grid.appendChild(card);
+  });
+
+  renderTimeline(highlights, S.videoDuration || 0);
+  setStatus('Complete', true);
+  log(`Generated ${highlights.length} clips`, 'ok');
+
+  // Reset generate button
+  const btn = document.getElementById('genBtn');
+  btn.disabled = false;
+  btn.textContent = 'Generate Clips';
+  document.getElementById('cancelBtn').style.display = 'none';
+  if (S.timer) clearInterval(S.timer);
+
+  // Switch to Clips tab
+  switchMainTab('clips');
+}
+
+function renderClips(highlights, clips) {
+  renderClipsFromSSE(highlights);
+}
+
+function renderChapters(chapters) {
+  if (!chapters || chapters.length === 0) return;
+  S.chapters = chapters;
+  const section = document.getElementById('chaptersSection');
+  const list = document.getElementById('chaptersList');
+  section.style.display = 'block';
+  list.innerHTML = '';
+  chapters.forEach((ch, i) => {
+    const chip = document.createElement('div');
+    chip.style.cssText = 'padding:6px 12px;background:var(--charcoal-3);border:1px solid var(--border);font-size:11px;font-family:var(--font);color:var(--text-secondary);cursor:pointer;';
+    chip.textContent = `${ch.title} (${fmtTime(ch.start)})`;
+    chip.title = ch.summary || '';
+    chip.onclick = () => {
+      // Find clip in this chapter and preview it
+      const clipIdx = S.highlights.findIndex(h => h.start >= ch.start && h.start < ch.end);
+      if (clipIdx >= 0) previewClip(clipIdx);
+    };
+    list.appendChild(chip);
+  });
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// TIMELINE
+// ═══════════════════════════════════════════════════════════════════════════
+
+const TIMELINE_COLORS = [
+  'var(--accent)', 'var(--green)', 'var(--red)', 'var(--yellow)', 'var(--blue)',
+  '#ec4899', '#f97316', '#06b6d4', '#84cc16', '#a855f7',
+];
+
+function renderTimeline(highlights, totalDuration) {
+  const track = document.getElementById('timelineTrack');
+  if (!track || !highlights || highlights.length === 0 || totalDuration <= 0) return;
+  track.innerHTML = '';
+  document.getElementById('timelineStart').textContent = '0:00';
+  document.getElementById('timelineDuration').textContent = fmtTime(totalDuration);
+
+  highlights.forEach((h, i) => {
+    const left = (h.start / totalDuration) * 100;
+    const width = ((h.end - h.start) / totalDuration) * 100;
+    const bar = document.createElement('div');
+    bar.className = 'timeline-clip';
+    bar.style.cssText = `left:${left}%;width:${Math.max(width, 0.5)}%;background:${TIMELINE_COLORS[i % TIMELINE_COLORS.length]};`;
+    bar.title = `${fmtTime(h.start)} – ${fmtTime(h.end)} · Score: ${h.viral_score}`;
+    bar.onclick = () => previewClip(i);
+    track.appendChild(bar);
+  });
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// PREVIEW / DOWNLOAD
+// ═══════════════════════════════════════════════════════════════════════════
+
+function previewClip(i) {
+  const v = document.getElementById('prevVideo');
+  v.src = '/api/clip/' + S.jobId + '/' + i;
+  document.getElementById('previewModal').classList.add('visible');
+  v.play();
+}
+
+function closePreview() {
+  document.getElementById('previewModal').classList.remove('visible');
+  const v = document.getElementById('prevVideo');
+  v.pause();
+  v.src = '';
+}
+
+function copyCaption(i) {
+  const h = S.highlights[i] || {};
+  const caption = h.caption || h.text || '';
+  const tags = (h.hashtags || []).map(t => '#' + t).join(' ');
+  const full = tags ? caption + '\n\n' + tags : caption;
+  navigator.clipboard.writeText(full).then(() => {
+    toast('Caption + hashtags copied!', 'ok');
+  }).catch(() => {
+    const el = document.getElementById('cap' + i);
+    if (el) {
+      const range = document.createRange();
+      range.selectNodeContents(el);
+      const sel = window.getSelection();
+      sel.removeAllRanges();
+      sel.addRange(range);
+      toast('Selected — Ctrl+C to copy', 'info');
+    }
+  });
+}
+
+function copyAllCaptions() {
+  if (!S.highlights || S.highlights.length === 0) return toast('No clips', 'err');
+  const lines = S.highlights.map((h, i) => {
+    const caption = h.caption || h.text || '';
+    const tags = (h.hashtags || []).map(t => '#' + t).join(' ');
+    const full = tags ? caption + '\n' + tags : caption;
+    return `Clip ${i+1} (${fmtTime(h.start)}–${fmtTime(h.end)}): ${full}`;
+  });
+  const all = lines.join('\n\n');
+  navigator.clipboard.writeText(all).then(() => {
+    toast(`Copied ${S.highlights.length} captions!`, 'ok');
+  }).catch(() => {
+    toast('Copy failed — select and Ctrl+C manually', 'err');
+  });
+}
+
+function regenerateCaption(i) {
+  const h = S.highlights[i];
+  if (!h) return;
+  const text = h.text || '';
+  if (!text) return toast('No transcript for this clip', 'err');
+
+  // Show loading state
+  const capEl = document.getElementById('cap' + i);
+  const tagsEl = document.getElementById('tags' + i);
+  if (capEl) capEl.textContent = 'Generating...';
+  if (tagsEl) tagsEl.textContent = '';
+
+  // Generate caption + hashtags via API — use _jobId for bulk clips
+  const jobId = h._jobId || S.jobId;
+  const clipIdx = h._clipIdx !== undefined ? h._clipIdx : i;
+  fetch('/api/regenerate_caption/' + jobId + '/' + clipIdx, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: '{}',
+  })
+    .then(r => r.json())
+    .then(d => {
+      if (d.caption) {
+        h.caption = d.caption;
+        h.hashtags = d.hashtags || [];
+        if (capEl) capEl.textContent = d.caption.substring(0, 120) + (d.caption.length > 120 ? '…' : '');
+        if (tagsEl) tagsEl.textContent = (h.hashtags.length > 0) ? h.hashtags.map(t => '#' + t).join(' ') : '';
+        toast('Caption regenerated!', 'ok');
+      }
+    })
+    .catch(() => {
+      toast('Regeneration failed', 'err');
+      if (capEl) capEl.textContent = (h.caption || text).substring(0, 120);
+    });
+}
+
+function regenerateAllCaptions() {
+  if (!S.highlights || S.highlights.length === 0) return toast('No clips', 'err');
+  let done = 0;
+  const total = S.highlights.length;
+  toast(`Regenerating ${total} captions...`, 'info');
+
+  S.highlights.forEach((h, i) => {
+    setTimeout(() => {
+      regenerateCaption(i);
+      done++;
+      if (done === total) toast('All captions regenerated!', 'ok');
+    }, i * 500);  // stagger to avoid overwhelming Ollama
+  });
+}
+
+function downloadAllClips() {
+  if (!S.highlights) return;
+  S.highlights.forEach((_, i) => {
+    setTimeout(() => downloadClip(i), i * 200);
+  });
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// BULK FILE UPLOAD
+// ═══════════════════════════════════════════════════════════════════════════
+
+let _bulkFiles = [];
+let _bulkRunning = false;
+
+function handleBulkFiles(files) {
+  _bulkFiles = Array.from(files);
+  const list = document.getElementById('bulkFileList');
+  list.innerHTML = '';
+  _bulkFiles.forEach((f, i) => {
+    const div = document.createElement('div');
+    div.id = 'bf' + i;
+    div.style.cssText = 'display:flex;align-items:center;gap:6px;padding:3px 0;font-size:11px;font-family:var(--font);';
+    div.innerHTML = `<span id="bfs${i}" style="width:16px;text-align:center;">⏳</span><span style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${f.name}</span><span style="color:var(--text-muted);">${(f.size/1024/1024).toFixed(1)}MB</span>`;
+    list.appendChild(div);
+  });
+  document.getElementById('bulkUploadBtn').disabled = _bulkFiles.length === 0;
+  document.getElementById('bulkStatus').textContent = `${_bulkFiles.length} file${_bulkFiles.length !== 1 ? 's' : ''} selected`;
+}
+
+// ── Bulk upload state ──
+let _bulkClips = [];  // [{jobId, name, highlights}]
+let _bulkClipOffset = 0; // running index for clip numbering
+
+async function startBulkUpload() {
+  if (_bulkFiles.length === 0 || _bulkRunning) return;
+  _bulkRunning = true;
+  _bulkClips = [];
+  _bulkClipOffset = 0;
+  const btn = document.getElementById('bulkUploadBtn');
+  btn.disabled = true;
+  btn.textContent = '⏳ Uploading…';
+
+  // Phase 1: Upload ALL files up front
+  const jobs = [];
+  for (let i = 0; i < _bulkFiles.length; i++) {
+    const file = _bulkFiles[i];
+    const statusEl = document.getElementById('bfs' + i);
+    const fileEl = document.getElementById('bf' + i);
+    try {
+      statusEl.textContent = '⏳';
+      document.getElementById('bulkStatus').textContent = `Uploading ${i+1}/${_bulkFiles.length}: ${file.name}`;
+      const fd = new FormData();
+      fd.append('file', file);
+      const resp = await fetch('/api/bulk_upload', { method: 'POST', body: fd });
+      let data;
+      try { data = await resp.json(); } catch(e) { throw new Error(`HTTP ${resp.status}: upload failed`); }
+      if (!data.job_id) throw new Error(data.detail || 'no job_id');
+      statusEl.textContent = '✅';
+      if (fileEl) fileEl.querySelector('span:nth-child(2)').textContent = `Queued: ${file.name}`;
+      jobs.push({ file, fileIndex: i, data, statusEl, fileEl });
+    } catch (e) {
+      statusEl.textContent = '❌';
+      document.getElementById('bulkStatus').textContent = `Error: ${file.name} — ${e.message}`;
+      log(`${file.name} failed: ${e.message}`, 'err');
+    }
+  }
+
+  // Phase 2: Start each pipeline and wait for it (sequential)
+  const opts = {
+    platform: S.platform || 'tiktok',
+    captions: document.getElementById('oCaptions').checked,
+    num_clips: parseInt(document.getElementById('oNumClips').value) || 5,
+    caption_style: document.getElementById('oCapStyle').value,
+    whisper_model: document.getElementById('oWhisper').value,
+    use_ollama: false,
+    face_crop: document.getElementById('oFace').checked,
+  };
+  for (const j of jobs) {
+    j.statusEl.textContent = '⏳';
+    if (j.fileEl) j.fileEl.querySelector('span:nth-child(2)').textContent = `Processing: ${j.file.name}`;
+    document.getElementById('bulkStatus').textContent = `Processing: ${j.file.name}`;
+    try {
+      const sr = await fetch('/api/start_job/' + j.data.job_id, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(opts),
+      });
+      if (!sr.ok) throw new Error('start failed');
+
+      // Wait for SSE completion — highlights come with video_url already set
+      const highlights = await new Promise((resolve, reject) => {
+        const es = new EventSource('/api/progress/' + j.data.job_id);
+        es.addEventListener('update', (e) => {
+          const d = JSON.parse(e.data);
+          if (d.status === 'completed' && d.highlights) { es.close(); resolve(d.highlights); }
+          if (d.status === 'error') { es.close(); reject(new Error(d.error || 'pipeline error')); }
+        });
+        es.addEventListener('error', () => { es.close(); reject(new Error('SSE lost')); });
+      });
+
+      j.statusEl.textContent = '✅';
+      if (j.fileEl) j.fileEl.querySelector('span:nth-child(2)').textContent = `Done: ${j.file.name} (${highlights.length} clips)`;
+      renderBulkFileClips(j.data.job_id, j.file.name, highlights);
+      log(`Done: ${j.file.name} — ${highlights.length} clips`, 'ok');
+    } catch (e) {
+      j.statusEl.textContent = '❌';
+      document.getElementById('bulkStatus').textContent = `Error: ${j.file.name} — ${e.message}`;
+    }
+  }
+
+  _bulkRunning = false;
+  _bulkFiles = [];
+  document.getElementById('bulkFileList').innerHTML = '';
+  document.getElementById('bulkUploadBtn').textContent = 'Upload All';
+  document.getElementById('bulkUploadBtn').disabled = true;
+  document.getElementById('bulkStatus').textContent = `Done — ${_bulkClips.length} file(s), ${_bulkClipOffset} clips`;
+  switchMainTab('clips');
+  setTimeout(() => { document.getElementById('bulkStatus').textContent = ''; }, 8000);
+}
+
+function renderBulkFileClips(jobId, fileName, highlights) {
+  const grid = document.getElementById('clipsGrid');
+  if (_bulkClips.length === 0) {
+    grid.innerHTML = '';
+    document.getElementById('empty').style.display = 'none';
+    document.getElementById('clipsSection').classList.add('visible');
+  }
+
+  const baseIdx = _bulkClipOffset;
+  _bulkClips.push({ jobId, name: fileName, highlights });
+  _bulkClipOffset += highlights.length;
+  document.getElementById('clipCount').textContent = _bulkClipOffset + ' clips';
+
+  highlights.forEach((h, i) => {
+    const clipIdx = h.clip_index !== undefined ? h.clip_index : i;
+    const globalIdx = baseIdx + i;
+    const sc = vbClass(h.viral_score || 0);
+    const dur = (h.end - h.start) || 0;
+    h.text = h.text || '';
+    const card = document.createElement('div');
+    card.className = 'clip-card';
+    card.innerHTML = `
+      <div class="clip-preview" onclick="previewBulkClip('${jobId}',${clipIdx})">
+        <video src="/api/clip/${jobId}/${clipIdx}" preload="metadata" muted playsinline></video>
+        <span class="clip-badge">${fmtTime(h.start)} – ${fmtTime(h.end)}</span>
+        <div class="viral-badge ${sc}">${h.viral_score || 0}</div>
+        <div class="clip-upload-hud">
+          <button class="clip-upload-btn dl" onclick="event.stopPropagation();downloadBulkClip('${jobId}',${clipIdx})" title="Download">↓</button>
+        </div>
+      </div>
+      <div class="clip-info">
+        <div class="clip-title-muted" style="font-size:10px;color:var(--text-muted);font-family:var(--font);margin-bottom:4px;">${fileName}</div>
+        <div class="clip-time">⏱ ${fmtTime(dur)} · Hook: ${h.hook_type || 'none'}</div>
+        <div class="clip-caption-box" id="captionBox${globalIdx}" onclick="copyCaption(${globalIdx})" style="cursor:pointer;position:relative;" title="Click to copy">
+          <button class="clip-copy-btn" onclick="event.stopPropagation();copyCaption(${globalIdx})">📋</button>
+          <div class="clip-caption-text" id="cap${globalIdx}">${(h.text || '').substring(0, 120)}</div>
+          <div class="clip-hashtags" id="tags${globalIdx}"></div>
+        </div>
+        <div class="clip-actions">
+          <button class="btn btn-ghost btn-sm" onclick="previewBulkClip('${jobId}',${clipIdx})">Preview</button>
+          <button class="btn btn-ghost btn-sm" onclick="regenerateCaption(${globalIdx})" title="Regenerate caption">🔄</button>
+          <button class="btn btn-ghost btn-sm" onclick="downloadBulkClip('${jobId}',${clipIdx})">↓</button>
+        </div>
+      </div>
+    `;
+    grid.appendChild(card);
+  });
+
+  S.highlights = S.highlights || [];
+  highlights.forEach((h, i) => {
+    const clipIdx = h.clip_index !== undefined ? h.clip_index : i;
+    S.highlights[baseIdx + i] = Object.assign({}, h, { _jobId: jobId, _clipIdx: clipIdx });
+  });
+}
+
+function previewBulkClip(jobId, idx) {
+  const modal = document.getElementById('previewModal');
+  document.getElementById('prevVideo').src = `/api/clip/${jobId}/${idx}`;
+  modal.classList.add('visible');
+}
+
+function downloadBulkClip(jobId, idx) {
+  window.open(`/api/clip/${jobId}/${idx}?download=true`, '_blank');
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// SETTINGS
+// ═══════════════════════════════════════════════════════════════════════════
+
+// ═══════════════════════════════════════════════════════════════════════════
+// OLLAMA / AI CONFIG
+// ═══════════════════════════════════════════════════════════════════════════
+
+function toggleOllamaStatus() {
+  const enabled = document.getElementById('oOllama').checked;
+  const row = document.getElementById('ollamaStatusRow');
+  const dot = document.getElementById('ollamaDot');
+  const txt = document.getElementById('ollamaStatusText');
+  if (enabled) {
+    row.style.display = 'flex';
+    dot.style.background = 'var(--text-muted)';
+    txt.textContent = 'Checking…';
+    testOllama();
+  } else {
+    row.style.display = 'none';
+  }
+}
+async function testOllama() {
+  const dot = document.getElementById('ollamaDot');
+  const txt = document.getElementById('ollamaStatusText');
+  const url = document.getElementById('ollamaUrl')?.value || 'http://localhost:11434';
+  const model = document.getElementById('ollamaModel')?.value || 'llama3.1:8b';
+  const enabled = document.getElementById('oOllama')?.checked;
+  if (!enabled) { dot.style.background = 'var(--text-muted)'; txt.textContent = 'Disabled'; return; }
+  dot.style.background = 'var(--yellow)';
+  txt.textContent = 'Checking…';
+  try {
+    const r = await fetch('/api/ollama/status?url=' + encodeURIComponent(url) + '&model=' + encodeURIComponent(model));
+    const d = await r.json();
+    if (d.ok) {
+      if (d.model_found) {
+        dot.style.background = 'var(--green)';
+        txt.textContent = 'Connected (' + d.models.length + ' models)';
+      } else {
+        dot.style.background = 'var(--yellow)';
+        txt.textContent = 'Connected but "' + model + '" not found';
+      }
+    } else {
+      dot.style.background = 'var(--red)';
+      txt.textContent = d.error || 'Unavailable';
+    }
+  } catch (e) {
+    dot.style.background = 'var(--red)';
+    txt.textContent = 'Unavailable — ' + e.message;
+  }
+}
+
+async function testOllamaConnection() {
+  const el = document.getElementById('ollamaTestResult');
+  const url = document.getElementById('ollamaUrl')?.value || 'http://localhost:11434';
+  const model = document.getElementById('ollamaModel')?.value || 'llama3.1:8b';
+  el.style.color = 'var(--text-secondary)';
+  el.textContent = 'Testing…';
+  try {
+    // Step 1: Check status (tags)
+    const sr = await fetch('/api/ollama/status?url=' + encodeURIComponent(url) + '&model=' + encodeURIComponent(model));
+    const sd = await sr.json();
+    if (!sd.ok) {
+      el.style.color = 'var(--red)';
+      el.textContent = '✗ ' + (sd.error || 'Unavailable');
+      return;
+    }
+    if (!sd.model_found) {
+      el.style.color = 'var(--yellow)';
+      el.textContent = '⚠ Model "' + model + '" not in: ' + (sd.models || []).join(', ');
+      return;
+    }
+    // Step 2: Test generate
+    const gr = await fetch('/api/ollama/test', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ url: url, model: model })
+    });
+    const gd = await gr.json();
+    if (gd.ok) {
+      el.style.color = 'var(--green)';
+      el.textContent = '✓ Connected — ' + model + ' responding';
+    } else {
+      el.style.color = 'var(--yellow)';
+      el.textContent = '⚠ Ollama reachable but model returned: ' + (gd.error || 'error');
+    }
+  } catch (e) {
+    el.style.color = 'var(--red)';
+    el.textContent = '✗ ' + e.message;
+  }
+}
+
+async function ollamaListModels() {
+  const el = document.getElementById('ollamaModelList');
+  const url = document.getElementById('ollamaUrl')?.value || 'http://localhost:11434';
+  el.style.display = 'block';
+  el.textContent = 'Loading…';
+  try {
+    const r = await fetch('/api/ollama/status?url=' + encodeURIComponent(url));
+    const d = await r.json();
+    if (!d.ok) {
+      el.innerHTML = '<span style="color:var(--red);">Error: ' + (d.error || 'Unavailable') + '</span>';
+      return;
+    }
+    const models = d.models || [];
+    if (models.length === 0) {
+      el.innerHTML = '<span style="color:var(--yellow);">No models installed. Run: <code>ollama pull llama3.1:8b</code></span>';
+    } else {
+      el.innerHTML = models.map(m => {
+        return "<div style='padding:2px 0;cursor:pointer;' data-model='" + m + "'><span style='color:var(--cyan);'>" + m + "</span></div>";
+      }).join('');
+      el.querySelectorAll('[data-model]').forEach(div => {
+        div.addEventListener('click', function() {
+          document.getElementById('ollamaModel').value = this.dataset.model;
+        });
+      });
+    }
+  } catch (e) {
+    el.innerHTML = '<span style="color:var(--red);">Error: ' + e.message + '</span>';
+  }
+}
+
+function switchSettingsTab(tab) {
+  document.querySelectorAll('.settings-tab').forEach(t => t.classList.remove('active'));
+  document.querySelectorAll('.settings-section').forEach(s => s.classList.remove('active'));
+  document.getElementById('sec' + tab.charAt(0).toUpperCase() + tab.slice(1)).classList.add('active');
+  event.target.classList.add('active');
+}
+
+function switchMainTab(tab) {
+  document.querySelectorAll('.main-tab').forEach(t => t.classList.remove('active'));
+  document.querySelectorAll('.main-tab-content').forEach(c => c.style.display = 'none');
+  document.getElementById('tab' + tab.charAt(0).toUpperCase() + tab.slice(1)).classList.add('active');
+  document.getElementById('tabContent' + tab.charAt(0).toUpperCase() + tab.slice(1)).style.display = 'block';
+}
+
+function closeSettings() {
+  document.getElementById('settingsModal').classList.remove('visible');
+}
+
+
+
+// ═══════════════════════════════════════════════════════════════════════════
+// UTILITY
+// ═══════════════════════════════════════════════════════════════════════════
+
+function fmtTime(s) {
+  if (!s) return '0:00';
+  const m = Math.floor(s / 60);
+  const sec = Math.floor(s % 60);
+  return `${m}:${sec.toString().padStart(2, '0')}`;
+}
+
+function vbClass(score) {
+  if (score >= 70) return 'vh';
+  if (score >= 40) return 'vm';
+  return 'vl';
+}
+
+function updateEstimate() {
+  // Placeholder for time estimate update
+}
+
+function clearAll() {
+  document.getElementById('urlInput').value = '';
+  document.getElementById('vinfo').classList.remove('visible');
+  document.getElementById('clipsSection').classList.remove('visible');
+  document.getElementById('empty').style.display = 'flex';
+  document.getElementById('genBtn').disabled = true;
+  document.getElementById('logEntries').innerHTML = '';
+  setStatus('Ready', false);
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// INIT
+// ═══════════════════════════════════════════════════════════════════════════
+
+(async function init() {
+
+  // Check Ollama status on load
+  if (document.getElementById('oOllama')?.checked) {
+    toggleOllamaStatus();
+  }
+
+})();
+</script>
+</body>
+</html>

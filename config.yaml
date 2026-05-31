@@ -1,0 +1,76 @@
+# AI Clipper v2.0 Configuration
+# ──────────────────────────────────────────────
+
+server:
+  host: "127.0.0.1"
+  port: 7878
+
+download:
+  # Quality selection for yt-dlp
+  format: "bestvideo[height<=1080][ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/best"
+  # Max video length to process (seconds) — 0 means unlimited
+  max_duration: 7200
+
+transcription:
+  # Whisper model: tiny, base, small, medium, large-v3
+  # base  = fast, decent accuracy (default)
+  # small = good balance for most content
+  model_size: "base"
+  device: "cpu"         # cpu  |  cuda
+  compute_type: "int8"  # int8  |  float16  |  float32
+  # Whisper language hint (e.g. "en", "es", "de", or "auto")
+  language: "auto"
+
+audio_analysis:
+  # Enable librosa-based energy / laughter / shouting detection
+  enabled: true
+  # RMS energy threshold for "loud" moments (relative to median)
+  loud_threshold_db: 6
+  # ZCR spike threshold for laughter detection
+  laughter_zcr_multiplier: 2.5
+
+scene_detection:
+  # FFmpeg scene-change threshold (0.0–1.0, lower = more scenes)
+  threshold: 0.35
+  # Skip scene detection for videos longer than this (seconds)
+  skip_if_longer_than: 3600
+
+ai_scoring:
+  # Weights for viral score components (should sum to 1.0)
+  weights:
+    excitement_words: 0.20
+    audio_energy: 0.20
+    speech_density: 0.15
+    hook_quality: 0.15
+    scene_dynamics: 0.10
+    caps_shouting: 0.10
+    questions_curiosity: 0.10
+  # Minimum viral score to include a clip (0-100)
+  min_viral_score: 15
+  # Max candidate clips before overlap dedup
+  max_candidates: 30
+
+output:
+  default_platform: "tiktok"
+  # Encoding presets
+  video_bitrate: "4M"
+  audio_bitrate: "128k"
+  crf: 23                # H.264 quality (lower = better, 18-28 typical)
+  preset: "fast"         # ultrafast, fast, medium, slow
+  # Caption style: default, big, outline, highlight, tiktok
+  caption_style: "default"
+  # Brand template: none, minimal, bold, neon, corporate, tiktok
+  brand_template: "none"
+  # Face-aware crop (requires opencv-python)
+  face_tracking: true
+
+batch:
+  # Max concurrent downloads in batch mode
+  max_concurrent: 2
+  # Delay between starting batch jobs (seconds)
+  stagger_delay: 3
+
+cleanup:
+  # Remove downloads/clips older than N hours (0 = never)
+  max_age_hours: 24
+  cleanup_on_start: false
