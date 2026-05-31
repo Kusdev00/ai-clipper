@@ -31,12 +31,10 @@ from flask import (
 
 # ── Project Setup ──────────────────────────────────
 if os.name == "nt":
-    BASE_DIR = Path(r"C:\Users\ojala\Desktop\ai-clipper")
     import io as _io
     sys.stdout = _io.TextIOWrapper(sys.stdout.buffer, encoding="utf-8", errors="replace")
     sys.stderr = _io.TextIOWrapper(sys.stderr.buffer, encoding="utf-8", errors="replace")
-else:
-    BASE_DIR = Path(__file__).parent
+BASE_DIR = Path(__file__).parent
 sys.path.insert(0, str(BASE_DIR))
 
 from core.config import (
@@ -62,6 +60,10 @@ app = Flask(
 # In-memory job store (job_id -> job dict)
 JOBS: dict[str, dict] = {}
 JOBS_LOCK = threading.Lock()
+
+# Ensure required directories exist on startup
+for _p in (DOWNLOADS_DIR, CLIPS_DIR):
+    os.makedirs(_p, exist_ok=True)
 
 
 # ════════════════════════════════════════════════════════

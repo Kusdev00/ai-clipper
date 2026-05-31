@@ -2,17 +2,7 @@
 
 import os
 
-# Detect if we're running on Windows Python and adjust paths accordingly
-# When Flask runs on Windows Python, it sees C:\ not /mnt/c/
-if os.name == "nt":
-    # Running on native Windows — use the absolute Windows path
-    BASE_DIR = r"C:\Users\ojala\Desktop\ai-clipper"
-elif "WSL_DISTRO_NAME" in os.environ:
-    # Running inside WSL — use the /mnt/c path from the file's location
-    BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-else:
-    # Linux native
-    BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
 DOWNLOADS_DIR = os.path.join(BASE_DIR, "downloads")
 CLIPS_DIR = os.path.join(BASE_DIR, "clips")
