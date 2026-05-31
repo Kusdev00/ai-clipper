@@ -19,7 +19,7 @@ Then you download the clips, copy the captions, and upload them to TikTok Studio
 
 - **Python 3.11+**
 - **Ollama** with `llama3.1:8b` — for caption generation (set `OLLAMA_MODEL` env var to use a different model)
-- **Google Chrome** — used for TikTok login (optional, only if you want auto-upload)
+- **FFmpeg** — for video processing (clip cutting, scene detection)
 
 ## Quick Start
 
