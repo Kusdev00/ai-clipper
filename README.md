@@ -11,21 +11,21 @@ Paste a URL (YouTube, TikTok, etc.) or upload video files directly. AI Clipper:
 3. **Analyzes** audio + video for exciting moments (scene changes, laughter, hooks, value, shareability)
 4. **Scores** each segment for viral potential
 5. **Cuts** the top moments into clips (vertical 9:16 for TikTok/Reels/Shorts)
-6. **Generates** AI captions & hashtags via Ollama (llama3.1 or similar)
+6. **Generates** AI captions & hashtags via Ollama with llama3.1:8b
 
 Then you download the clips, copy the captions, and upload them to TikTok Studio / YouTube Shorts.
 
 ## Requirements
 
 - **Python 3.11+**
-- **Ollama** with `llama3.1:8b` (or any model) — for caption generation
+- **Ollama** with `llama3.1:8b` — for caption generation (set `OLLAMA_MODEL` env var to use a different model)
 - **Google Chrome** — used for TikTok login (optional, only if you want auto-upload)
 
 ## Quick Start
 
 ```bash
 # Clone the repo
-git clone https://github.com/kusdev/ai-clipper.git
+git clone https://github.com/Kusdev00/ai-clipper.git
 cd ai-clipper
 
 # Create virtual environment
