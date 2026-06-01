@@ -1123,33 +1123,14 @@ def _burn_captions_opencv(
     logger.info("captions burned: %s (%d frames)", output_path, frame_idx)
     return output_path
 
-
-
-def _blur_bg_opencv(source_path: str, output_path: str, start: float, duration: float,
-                     w: int, h: int, fps: int, preset: dict,
-                     has_audio: bool, ffmpeg_env: dict,
-                     progress_callback=None) -> str:
+def _build_glow_filter(src_w: int, src_h: int, w: int, h: int, fps: int, duration: float) -> tuple:
     """
-    Fast blur_bg compositing using OpenCV + FFmpeg pipe.
+    Build an FFmpeg filter chain that creates a glow/pad effect.
 
-    Per-frame: each frame is resized to fill canvas, blurred+darkened for
-    background, then the sharp (fit-inside) version is overlaid centered.
-
-    Two-pass approach for audio sync:
-      Pass 1: OpenCV composites frames → raw H.264 temp file (no audio)
-      Pass 2: FFmpeg muxes video + audio from source with accurate -ss seek
+    The source video is scaled to fit inside the canvas, centered,
+    surrounded by a soft colored glow, with dark fill elsewhere.
+    Returns (filter_string, is_complex).
     """
-    import tempfile
-
-    # Compute foreground dimensions (fit inside canvas, maintain aspect)
-    cap_probe = cv2.VideoCapture(source_path)
-    if not cap_probe.isOpened():
-        raise RuntimeError(f"Cannot open video: {source_path}")
-    src_w = int(cap_probe.get(cv2.CAP_PROP_FRAME_WIDTH))
-    src_h = int(cap_probe.get(cv2.CAP_PROP_FRAME_HEIGHT))
-    src_fps = cap_probe.get(cv2.CAP_PROP_FPS) or fps
-    cap_probe.release()
-
     if src_w / src_h > w / h:
         fg_w = w
         fg_h = int(src_h * w / src_w)
@@ -1158,140 +1139,36 @@ def _blur_bg_opencv(source_path: str, output_path: str, start: float, duration: 
         fg_w = int(src_w * h / src_h)
     fg_w -= fg_w % 2
     fg_h -= fg_h % 2
+
     ox = (w - fg_w) // 2
     oy = (h - fg_h) // 2
 
-    # Pass 1: OpenCV compositing → H.264 temp file via FFmpeg pipe
-    tmp_video = os.path.join(tempfile.gettempdir(), f"blur_bg_{os.getpid()}_pass1.mp4")
+    # Glow settings
+    glow_pad = 6
+    glow_alpha = "0.4"
+    glow_color = "0x8844FF"
 
-    enc_cmd = [
-        FFMPEG, "-y",
-        "-f", "rawvideo", "-vcodec", "rawvideo",
-        "-pix_fmt", "bgr24",
-        "-s", f"{w}x{h}",
-        "-r", str(fps),
-        "-i", "-",
-        "-c:v", "libx264",
-        "-preset", "ultrafast",
-        "-crf", "23",
-        "-pix_fmt", "yuv420p",
-        "-an",              # no audio in pass 1
-        "-threads", "0",
-        tmp_video,
-    ]
+    outer_pad = 20
+    outer_color = "0x4422AA"
+    outer_alpha = "0.2"
 
-    logger.info("_blur_bg_opencv: pass 1 — compositing %dx%d → %dx%d", src_w, src_h, w, h)
-
-    enc_proc = subprocess.Popen(
-        enc_cmd,
-        stdin=subprocess.PIPE,
-        stdout=subprocess.DEVNULL,
-        stderr=subprocess.PIPE,
-        env=ffmpeg_env,
+    filter_chain = (
+        f"[0:v]scale={fg_w}:{fg_h}:flags=lanczos[fg];"
+        f"color=c=black@0.85:s={w}x{h}:d={duration}[base];"
+        f"[base]drawbox=x={ox - outer_pad}:y={oy - outer_pad}:"
+        f"w={fg_w + outer_pad * 2}:h={fg_h + outer_pad * 2}:"
+        f"color={outer_color}@{outer_alpha}:t=fill[glow1];"
+        f"[glow1]drawbox=x={ox - glow_pad}:y={oy - glow_pad}:"
+        f"w={fg_w + glow_pad * 2}:h={fg_h + glow_pad * 2}:"
+        f"color={glow_color}@{glow_alpha}:t=fill[glow2];"
+        f"[glow2][fg]overlay={ox}:{oy}:format=auto,"
+        f"fps={fps},format=yuv420p"
     )
 
-    try:
-        cap = cv2.VideoCapture(source_path)
-        if not cap.isOpened():
-            raise RuntimeError(f"Cannot open video: {source_path}")
+    return filter_chain, True
 
-        start_frame = int(start * src_fps)
-        cap.set(cv2.CAP_PROP_POS_FRAMES, start_frame)
-        total_frames = int(duration * src_fps)
-        frame_idx = 0
 
-        while True:
-            ret, frame = cap.read()
-            if not ret:
-                break
 
-            elapsed = frame_idx / src_fps
-            if elapsed > duration:
-                break
-
-            # Background: this frame resized to fill, blurred + darkened
-            bg = cv2.resize(frame, (w, h), interpolation=cv2.INTER_LINEAR)
-            bg = cv2.GaussianBlur(bg, (31, 31), 0)
-            bg = cv2.convertScaleAbs(bg, alpha=0.85, beta=-12)
-
-            # Foreground: this frame resized to fit inside, sharp
-            fg = cv2.resize(frame, (fg_w, fg_h), interpolation=cv2.INTER_LINEAR)
-            bg[oy:oy+fg_h, ox:ox+fg_w] = fg
-
-            enc_proc.stdin.write(bg.tobytes())
-
-            frame_idx += 1
-            if progress_callback and frame_idx % 15 == 0:
-                pct = min(100.0, frame_idx / max(1, total_frames) * 100)
-                progress_callback(round(pct, 1))
-
-        cap.release()
-        enc_proc.stdin.close()
-
-        try:
-            _, stderr_data = enc_proc.communicate(timeout=300)
-        except subprocess.TimeoutExpired:
-            enc_proc.kill()
-            enc_proc.wait()
-            raise RuntimeError("FFmpeg pass 1 timed out after 300s")
-
-        if enc_proc.returncode != 0:
-            err_tail = (stderr_data or b"")[-2000:].decode("utf-8", errors="replace")
-            raise RuntimeError(f"FFmpeg pass 1 failed (rc={enc_proc.returncode}):\n{err_tail}")
-
-    except Exception:
-        try:
-            enc_proc.stdin.close()
-        except Exception:
-            pass
-        enc_proc.kill()
-        enc_proc.wait()
-        raise
-
-    logger.info("_blur_bg_opencv: pass 1 done, %d frames", frame_idx)
-
-    # Pass 2: mux video + audio with accurate seek
-    # Use -ss before -i for fast seek, -copyts to preserve timestamps
-    cmd2 = [
-        FFMPEG, "-y",
-        "-i", tmp_video,                    # video input (no audio)
-        "-ss", str(start),                  # seek in source for audio
-        "-i", source_path,
-        "-t", str(duration),
-        "-map", "0:v",                      # video from pass 1
-        "-map", "1:a?",                     # audio from source (optional)
-        "-c:v", "copy",                     # don't re-encode video
-    ]
-    if has_audio:
-        cmd2 += ["-c:a", "aac", "-b:a", preset["audio_bitrate"]]
-    else:
-        cmd2 += ["-an"]
-    cmd2 += [
-        "-movflags", "+faststart",
-        "-shortest",                        # end when shortest stream ends
-        output_path,
-    ]
-
-    logger.info("_blur_bg_opencv: pass 2 — muxing audio")
-
-    result2 = subprocess.run(cmd2, capture_output=True, text=True, timeout=120, env=ffmpeg_env)
-
-    # Cleanup temp file
-    if os.path.isfile(tmp_video):
-        try:
-            os.remove(tmp_video)
-        except OSError:
-            pass
-
-    if result2.returncode != 0:
-        err_tail = (result2.stderr or "")[-2000:]
-        raise RuntimeError(f"FFmpeg pass 2 (audio mux) failed: {err_tail}")
-
-    if progress_callback:
-        progress_callback(100.0)
-
-    logger.info("_blur_bg_opencv: done → %s", output_path)
-    return output_path
 
 
 def cut_clip(
@@ -1311,41 +1188,7 @@ def cut_clip(
     """
     Extract a clip from *source_path*, reformat for *platform*, optionally
     add animated captions and face-aware cropping.
-
-    Parameters
-    ----------
-    source_path : str
-        Path to the source video file.
-    job_id : str
-        Identifier for this processing job (used for output directory).
-    clip_id : int
-        Sequential clip number (used in the output filename).
-    start, end : float
-        Clip boundaries in seconds.
-    platform : str
-        One of ``tiktok``, ``youtube_short``, ``instagram_reel``, ``twitter``.
-    captions : list[dict] | None
-        Word-level timing data (as returned by :func:`build_caption_words`).
-    caption_style : str
-        Caption visual style (see ``CAPTION_STYLE_PRESETS``).
-    brand_template : str | None
-        Name of a brand template preset (see ``BRAND_TEMPLATE_PRESETS``).
-    face_track : bool
-        If True, use face-aware cropping instead of centre crop.
-    crop_mode : str
-        How to handle aspect ratio conversion to 9:16:
-        - "blur_bg" (default) — blurred background fill, no black bars, no lost content
-        - "center_crop" — classic center crop (may cut off edges)
-        - "face_track" — detect faces and keep them centered
-    progress_callback : callable | None
-        Called with a float 0-100 indicating progress.
-
-    Returns
-    -------
-    str
-        Absolute path to the rendered clip.
     """
-    # --- Validate platform ------------------------------------------------
     if platform not in PLATFORM_PRESETS:
         raise ValueError(
             f"Unknown platform '{platform}'. "
@@ -1354,13 +1197,11 @@ def cut_clip(
 
     preset = PLATFORM_PRESETS[platform]
     w, h = preset["width"], preset["height"]
-    # Ensure even dimensions for H.264 compatibility
     w = w - (w % 2)
     h = h - (h % 2)
     fps = preset["fps"]
     duration = end - start
 
-    # Enforce max duration
     if duration > preset["max_duration"]:
         end = start + preset["max_duration"]
         duration = preset["max_duration"]
@@ -1369,7 +1210,6 @@ def cut_clip(
     if duration < 3:
         raise ValueError("Clip too short (minimum 3 seconds)")
 
-    # --- Brand template ---------------------------------------------------
     brand = None
     if brand_template:
         if isinstance(brand_template, dict):
@@ -1380,13 +1220,11 @@ def cut_clip(
         if not caption_style or caption_style == "default":
             caption_style = bt_dict.get("caption_style", caption_style)
 
-    # --- Output path ------------------------------------------------------
     clip_dir = os.path.join(CLIPS_DIR, job_id)
     os.makedirs(clip_dir, exist_ok=True)
     output_filename = f"clip_{clip_id:02d}_{platform}.mp4"
     output_path = os.path.join(clip_dir, output_filename)
 
-    # --- Read source info -------------------------------------------------
     try:
         src_info = _probe_video(source_path)
         src_w = int(src_info["streams"][0].get("width", 1920))
@@ -1394,103 +1232,23 @@ def cut_clip(
     except Exception as exc:
         logger.warning("Could not probe source video (%s), assuming 1920x1080", exc)
         src_w, src_h = 1920, 1080
-    src_aspect = src_w / src_h
-    dst_aspect = w / h
 
-    # --- Check audio ------------------------------------------------------
     source_has_audio = _has_audio(source_path)
 
-    # --- FFmpeg environment -----------------------------------------------
     ffmpeg_env = os.environ.copy()
     ffmpeg_env.pop("FONTCONFIG_FILE", None)
     ffmpeg_env.pop("FONTCONFIG_PATH", None)
     ffmpeg_env.pop("FONTCONFIG_SYSROOT", None)
 
-    # ================================================================
-    # FAST PATH: blur_bg via OpenCV compositing (5-10x faster)
-    # ================================================================
-    if crop_mode == "blur_bg":
-        logger.info("cut_clip: using fast OpenCV blur_bg path")
-        # If we have captions, do a 2-pass: blur_bg composite → subtitle burn
-        if captions:
-            import tempfile
-            tmp_composite = os.path.join(tempfile.gettempdir(), f"blur_bg_{job_id}_{clip_id}_composite.mkv")
-            _blur_bg_opencv(
-                source_path=source_path,
-                output_path=tmp_composite,
-                start=start, duration=duration,
-                w=w, h=h, fps=fps, preset=preset,
-                has_audio=False,
-                ffmpeg_env=ffmpeg_env,
-                progress_callback=progress_callback,
-            )
-            # Generate ASS subtitles
-            ass_file = None
-            try:
-                from core.ass_subtitles import generate_ass_subtitles
-                ass_file = generate_ass_subtitles(
-                    words=captions, width=w, height=h, template_name=caption_style,
-                )
-            except Exception as exc:
-                logger.warning("ASS subtitle generation failed: %s", exc)
-            # Pass 2: burn subtitles + add audio
-            cmd2 = [FFMPEG, "-y", "-i", tmp_composite]
-            if source_has_audio:
-                cmd2 += ["-ss", str(start), "-i", source_path, "-t", str(duration),
-                         "-c:a", "aac", "-b:a", preset["audio_bitrate"]]
-            else:
-                cmd2 += ["-an"]
-            vf_script = None
-            if ass_file and os.path.isfile(ass_file):
-                # Write filter to temp file to avoid Windows path escaping nightmares.
-                # FFmpeg's filter_graph parser treats ':' as separator, and Windows
-                # paths (C:\...) trigger it. A filter_script file bypasses all of that.
-                ass_abs = os.path.abspath(ass_file)
-                fonts_abs = os.path.abspath(os.path.join(
-                    os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "fonts"))
-                vf_script = os.path.join(tempfile.gettempdir(), f"vf_sub_{job_id}_{clip_id}.txt")
-                with open(vf_script, "w", encoding="utf-8") as vfh:
-                    ass_p = ass_abs.replace("\\", "/").replace(":", "\\:")
-                    fonts_p = fonts_abs.replace("\\", "/").replace(":", "\\:")
-                    vfh.write(f"subtitles=filename='{ass_p}':fontsdir='{fonts_p}'\n")
-                cmd2 += ["-filter_complex_script", vf_script]
-            else:
-                cmd2 += ["-c:v", "libx264", "-preset", "fast"]
-            cmd2 += ["-c:v", "libx264", "-preset", "fast", "-b:v", preset["video_bitrate"],
-                     "-movflags", "+faststart", "-pix_fmt", "yuv420p", "-threads", "0", output_path]
-            result2 = subprocess.run(cmd2, capture_output=True, text=True, timeout=300, env=ffmpeg_env)
-            # Cleanup
-            for f in [tmp_composite, ass_file, vf_script]:
-                if f and os.path.isfile(f):
-                    try:
-                        os.remove(f)
-                    except OSError:
-                        pass
-            if result2.returncode != 0:
-                raise RuntimeError(f"FFmpeg subtitle pass failed: {result2.stderr[-2000:]}")
-            if progress_callback:
-                progress_callback(100.0)
-            return output_path
-        else:
-            # No captions — single pass
-            return _blur_bg_opencv(
-                source_path=source_path,
-                output_path=output_path,
-                start=start,
-                duration=duration,
-                w=w, h=h, fps=fps, preset=preset,
-                has_audio=source_has_audio,
-                ffmpeg_env=ffmpeg_env,
-                progress_callback=progress_callback,
-            )
-
-    # ================================================================
-    # STANDARD PATH: center_crop / face_track via FFmpeg filters
-    # ================================================================
-
+    # Build video filter chain
     vf_string = None
+    is_complex = False
 
-    if crop_mode == "face_track":
+    if crop_mode == "blur_bg":
+        logger.info("cut_clip: using glow_bg effect (FFmpeg drawbox)")
+        vf_string, is_complex = _build_glow_filter(src_w, src_h, w, h, fps, duration)
+
+    elif crop_mode == "face_track":
         face_data = _detect_face_region(source_path, start, duration)
         if face_data:
             face_cx = face_data["cx"]
@@ -1508,202 +1266,138 @@ def cut_clip(
         crop_f = f"crop={w}:{h}:(in_w-out_w)/2:0"
         vf_string = f"{scale_f},{crop_f},fps={fps},format=yuv420p"
 
-    # --- Captions (optional) -----------------------------------------------
+    # Captions
     ass_file = None
     if captions:
         try:
             from core.ass_subtitles import generate_ass_subtitles
             ass_file = generate_ass_subtitles(
-                words=captions,
-                width=w,
-                height=h,
-                template_name=caption_style,
+                words=captions, width=w, height=h, template_name=caption_style,
             )
             logger.info("ASS subtitles generated: %s", ass_file)
         except Exception as exc:
             logger.warning("ASS subtitle generation failed (%s), skipping captions", exc)
 
+    # Build subtitle filter script
+    vf_script = None
     if ass_file and os.path.isfile(ass_file):
+        import tempfile as _tf
         ass_abs = os.path.abspath(ass_file)
-        fonts_abs = os.path.abspath(os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "fonts"))
-        # Escape drive colon for FFmpeg filter graph: C:\path → C\:/path
-        ass_fwd = ass_abs[0] + "\\:" + ass_abs[2:] if len(ass_abs) > 2 and ass_abs[1] == ":" else ass_abs
-        fonts_fwd = fonts_abs[0] + "\\:" + fonts_abs[2:] if len(fonts_abs) > 2 and fonts_abs[1] == ":" else fonts_abs
-        ass_fwd = ass_fwd.replace("\\", "/")
-        fonts_fwd = fonts_fwd.replace("\\", "/")
-        subtitle_filter = f"subtitles=filename='{ass_fwd}':fontsdir='{fonts_fwd}'"
-        vf_string = vf_string + "," + subtitle_filter
-        logger.info("ASS subtitles added to filter chain")
+        fonts_abs = os.path.abspath(os.path.join(
+            os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "fonts"))
+        vf_script = os.path.join(_tf.gettempdir(), f"vf_sub_{job_id}_{clip_id}.txt")
+        with open(vf_script, "w", encoding="utf-8") as vfh:
+            ass_p = ass_abs.replace("\\", "/").replace(":", "\\:")
+            fonts_p = fonts_abs.replace("\\", "/").replace(":", "\\:")
+            vfh.write(f"subtitles=filename='{ass_p}':fontsdir='{fonts_p}'\n")
+        logger.info("ASS subtitles filter script: %s", vf_script)
 
     logger.info("cut_clip vf: %s", vf_string[:200])
 
-    # --- Build FFmpeg command ---------------------------------------------
-    cmd = [
-        FFMPEG, "-y",
-        "-ss", str(start),
-        "-i", source_path,
-        "-t", str(duration),
-        "-vf", vf_string,
-        "-c:v", "libx264",
-        "-preset", "fast",
-        "-b:v", preset["video_bitrate"],
+    # Build FFmpeg command
+    import tempfile as _tf
+    cmd = [FFMPEG, "-y", "-ss", str(start), "-i", source_path, "-t", str(duration)]
+
+    if is_complex:
+        # Write complex filter to temp file, append subtitles if needed
+        vf_file = os.path.join(_tf.gettempdir(), f"vf_{job_id}_{clip_id}.txt")
+        with open(vf_file, "w", encoding="utf-8") as vfh:
+            vfh.write(vf_string)
+            if vf_script:
+                # Append subtitle filter after the glow chain output
+                vfh.write(f";[vf]subtitles=filename='{ass_abs.replace(chr(92), '/').replace(chr(58), chr(92)+chr(58))}':fontsdir='{fonts_abs.replace(chr(92), '/').replace(chr(58), chr(92)+chr(58))}'[vfinal]\n")
+                # Rename output pad
+                vfh.write("[vfinal]\n")
+        cmd += ["-filter_complex_script", vf_file]
+    else:
+        cmd += ["-vf", vf_string]
+        if vf_script:
+            cmd += ["-filter_complex_script", vf_script]
+
+    cmd += [
+        "-c:v", "libx264", "-preset", "fast", "-b:v", preset["video_bitrate"],
     ]
     if source_has_audio:
         cmd += ["-c:a", "aac", "-b:a", preset["audio_bitrate"]]
     else:
         cmd += ["-an"]
     cmd += [
-        "-movflags", "+faststart",
-        "-pix_fmt", "yuv420p",
-        "-threads", "0",
+        "-movflags", "+faststart", "-pix_fmt", "yuv420p", "-threads", "0",
         output_path,
     ]
 
     logger.info("cut_clip: %s", " ".join(cmd[:10]) + " ...")
 
-    # --- Run FFmpeg --------------------------------------------------------
     if progress_callback:
         progress_callback(0.0)
 
     logger.info("cut_clip: source exists=%s dir exists=%s", os.path.exists(source_path), os.path.isdir(clip_dir))
 
     try:
-        proc = subprocess.Popen(
-            cmd,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
-            text=True,
-            bufsize=1,
-            env=ffmpeg_env,
-        )
-        total_us = int(duration * 1_000_000)
-        try:
-            stdout_data, stderr_data = proc.communicate(timeout=600)
-        except subprocess.TimeoutExpired:
-            proc.kill()
-            proc.wait()
-            raise RuntimeError(f"FFmpeg cut timed out after 600s")
-
-        if stderr_data:
-            logger.debug("FFmpeg stderr:\n%s", stderr_data[-2000:])
-
-        if progress_callback and stderr_data:
-            for line in stderr_data.splitlines():
-                line = line.strip()
-                if line.startswith("out_time_us="):
-                    try:
-                        cur_us = int(line.split("=", 1)[1])
-                        pct = min(100.0, cur_us / total_us * 100)
-                        progress_callback(round(pct, 1))
-                    except (ValueError, ZeroDivisionError):
-                        pass
-
-        if proc.returncode != 0:
-            raise RuntimeError(
-                f"FFmpeg cut failed (rc={proc.returncode}) for {output_path}:\n{stderr_data[-3000:] if stderr_data else 'no stderr'}"
+        if is_complex:
+            log_path = os.path.join(clip_dir, f"ffmpeg_{clip_id:02d}.log")
+            log_fh = open(log_path, "w", encoding="utf-8", errors="replace")
+            proc = subprocess.Popen(
+                cmd, stdout=log_fh, stderr=subprocess.STDOUT, env=ffmpeg_env,
             )
+            ret = proc.wait(timeout=600)
+            log_fh.close()
+            if ret != 0:
+                try:
+                    with open(log_path, "r", encoding="utf-8", errors="replace") as f:
+                        tail = f.readlines()[-30:]
+                except Exception:
+                    tail = ["(could not read log)"]
+                raise RuntimeError(
+                    f"FFmpeg cut failed (rc={ret}) for {output_path}:\n{''.join(tail)}"
+                )
+        else:
+            proc = subprocess.Popen(
+                cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+                text=True, bufsize=1, env=ffmpeg_env,
+            )
+            total_us = int(duration * 1_000_000)
+            try:
+                stdout_data, stderr_data = proc.communicate(timeout=600)
+            except subprocess.TimeoutExpired:
+                proc.kill()
+                proc.wait()
+                raise RuntimeError("FFmpeg cut timed out after 600s")
+
+            if stderr_data:
+                logger.debug("FFmpeg stderr:\n%s", stderr_data[-2000:])
+
+            if progress_callback and stderr_data:
+                for line in stderr_data.splitlines():
+                    line = line.strip()
+                    if line.startswith("out_time_us="):
+                        try:
+                            cur_us = int(line.split("=", 1)[1])
+                            pct = min(100.0, cur_us / total_us * 100)
+                            progress_callback(round(pct, 1))
+                        except (ValueError, ZeroDivisionError):
+                            pass
+
+            if proc.returncode != 0:
+                raise RuntimeError(
+                    f"FFmpeg cut failed (rc={proc.returncode}) for {output_path}:\n"
+                    f"{stderr_data[-3000:] if stderr_data else 'no stderr'}"
+                )
 
     except RuntimeError:
         raise
     except Exception as exc:
         raise RuntimeError(f"FFmpeg error: {exc}")
     finally:
-        if ass_file and os.path.isfile(ass_file):
-            try:
-                os.remove(ass_file)
-            except OSError:
-                pass
+        for tmp_f in [vf_file if is_complex else None, vf_script, ass_file]:
+            if tmp_f and os.path.isfile(tmp_f):
+                try:
+                    os.remove(tmp_f)
+                except OSError:
+                    pass
 
     if progress_callback:
         progress_callback(100.0)
 
     logger.info("cut_clip: output saved to %s", output_path)
     return output_path
-
-
-
-
-
-# ---------------------------------------------------------------------------
-# Internal helpers
-# ---------------------------------------------------------------------------
-
-
-def _resolve_font_path(font_name: str) -> Optional[str]:
-    """
-    Try to resolve *font_name* to an absolute file path suitable for
-    FFmpeg's ``fontfile`` parameter.  Returns None if not found.
-    """
-    # Common font directories
-    search_dirs = [
-        "/usr/share/fonts",
-        "/usr/local/share/fonts",
-        os.path.expanduser("~/.fonts"),
-        os.path.expanduser("~/.local/share/fonts"),
-        "/mnt/c/Windows/Fonts",
-    ]
-
-    # Normalise name
-    name_lower = font_name.lower().replace("-", "").replace(" ", "")
-
-    for d in search_dirs:
-        if not os.path.isdir(d):
-            continue
-        for root, _, files in os.walk(d):
-            for f in files:
-                fl = f.lower().replace("-", "").replace(" ", "")
-                if fl.startswith(name_lower) and f.endswith((".ttf", ".otf")):
-                    return os.path.join(root, f)
-    return None
-
-
-def _escape_drawtext(text: str) -> str:
-    """Escape a string for FFmpeg drawtext filter.
-
-    Single quotes break drawtext's text='...' syntax, so we strip them.
-    Also escape backslashes and colons.
-    """
-    return text.replace("\\", "\\\\").replace("'", "").replace(":", "\\:").replace("%", "%%")
-
-
-def _build_logo_filter(brand: BrandTemplate, vid_w: int, vid_h: int) -> Optional[str]:
-    """Build an overlay filter string for a brand logo watermark."""
-    if not brand.logo_path or not os.path.isfile(brand.logo_path):
-        return None
-
-    logo_w = int(vid_w * brand.logo_scale)
-    pad = int(vid_w * 0.02)
-
-    # Position
-    pos = brand.logo_position
-    if "right" in pos:
-        x_expr = f"main_w-overlay_w-{pad}"
-    else:
-        x_expr = str(pad)
-
-    if "bottom" in pos:
-        y_expr = f"main_h-overlay_h-{pad}"
-    else:
-        y_expr = str(pad)
-
-    return (
-        f"[v]overlay={x_expr}:{y_expr}:format=auto:alpha={brand.logo_opacity}"
-    )
-
-
-def hex_to_ass_color(name: str) -> str:
-    """
-    Convert a simple colour name to an ASS hex string (BBGGRR).
-    """
-    colours = {
-        "white": "FFFFFF",
-        "black": "000000",
-        "red": "0000FF",
-        "green": "00FF00",
-        "blue": "FF0000",
-        "yellow": "00FFFF",
-        "cyan": "FFFF00",
-        "magenta": "FF00FF",
-        "orange": "0080FF",
-    }
-    return colours.get(name.lower(), "FFFFFF")
