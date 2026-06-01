@@ -1383,44 +1383,64 @@ def cut_clip(
     logger.info("cut_clip: source exists=%s dir exists=%s", os.path.exists(source_path), os.path.isdir(clip_dir))
 
     try:
-        proc = subprocess.Popen(
-            cmd,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
-            text=True,
-            bufsize=1,
-            env=ffmpeg_env,
-        )
-        total_us = int(duration * 1_000_000)
-
-        # Use communicate() to avoid deadlocks from simultaneous stdout/stderr reads
-        try:
-            stdout_data, stderr_data = proc.communicate(timeout=600)
-        except subprocess.TimeoutExpired:
-            proc.kill()
-            proc.wait()
-            raise RuntimeError(f"FFmpeg cut timed out after 600s")
-
-        # Log full stderr for debugging
-        if stderr_data:
-            logger.debug("FFmpeg stderr:\n%s", stderr_data[-2000:])
-
-        # Parse progress from stderr (best-effort)
-        if progress_callback and stderr_data:
-            for line in stderr_data.splitlines():
-                line = line.strip()
-                if line.startswith("out_time_us="):
-                    try:
-                        cur_us = int(line.split("=", 1)[1])
-                        pct = min(100.0, cur_us / total_us * 100)
-                        progress_callback(round(pct, 1))
-                    except (ValueError, ZeroDivisionError):
-                        pass
-
-        if proc.returncode != 0:
-            raise RuntimeError(
-                f"FFmpeg cut failed (rc={proc.returncode}) for {output_path}:\n{stderr_data[-3000:] if stderr_data else 'no stderr'}"
+        # For complex filters, don't capture stdout/stderr via pipes —
+        # it can cause deadlocks with large frames. Write to log file instead.
+        if is_complex_filter:
+            log_path = os.path.join(clip_dir, f"ffmpeg_{clip_id:02d}.log")
+            log_fh = open(log_path, "w", encoding="utf-8", errors="replace")
+            proc = subprocess.Popen(
+                cmd,
+                stdout=log_fh,
+                stderr=subprocess.STDOUT,
+                env=ffmpeg_env,
             )
+            ret = proc.wait(timeout=600)
+            log_fh.close()
+            if ret != 0:
+                # Read last lines of log for error
+                try:
+                    with open(log_path, "r", encoding="utf-8", errors="replace") as f:
+                        tail = f.readlines()[-30:]
+                except Exception:
+                    tail = ["(could not read log)"]
+                raise RuntimeError(
+                    f"FFmpeg cut failed (rc={ret}) for {output_path}:\n{''.join(tail)}"
+                )
+        else:
+            proc = subprocess.Popen(
+                cmd,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                text=True,
+                bufsize=1,
+                env=ffmpeg_env,
+            )
+            total_us = int(duration * 1_000_000)
+            try:
+                stdout_data, stderr_data = proc.communicate(timeout=600)
+            except subprocess.TimeoutExpired:
+                proc.kill()
+                proc.wait()
+                raise RuntimeError(f"FFmpeg cut timed out after 600s")
+
+            if stderr_data:
+                logger.debug("FFmpeg stderr:\n%s", stderr_data[-2000:])
+
+            if progress_callback and stdout_data:
+                for line in stderr_data.splitlines():
+                    line = line.strip()
+                    if line.startswith("out_time_us="):
+                        try:
+                            cur_us = int(line.split("=", 1)[1])
+                            pct = min(100.0, cur_us / total_us * 100)
+                            progress_callback(round(pct, 1))
+                        except (ValueError, ZeroDivisionError):
+                            pass
+
+            if proc.returncode != 0:
+                raise RuntimeError(
+                    f"FFmpeg cut failed (rc={proc.returncode}) for {output_path}:\n{stderr_data[-3000:] if stderr_data else 'no stderr'}"
+                )
 
     except RuntimeError:
         raise  # re-raise our own errors
