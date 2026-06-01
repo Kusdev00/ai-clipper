@@ -1227,82 +1227,52 @@ def cut_clip(
     src_aspect = src_w / src_h
     dst_aspect = w / h
 
+    vf_string = None  # set by each branch below
+    is_complex = False
+
     if crop_mode == "blur_bg":
-        # Blurred background approach:
-        # 1. Scale source so it FILLS the target (cover), crop excess
-        # 2. Blur that scaled version heavily → background layer
-        # 3. Scale source to FIT inside target (contain), overlay centered on top
-        # Result: no black bars, no lost content, blurred edges fill canvas
-
-        # Background: scale to fill entire canvas, blur, darken
-        bg_scale = f"scale={w}*1.2:{h}*1.2:flags=lanczos"
-        bg_blur = f"boxblur=20:20"
-        bg_dark = f"eq=brightness=-0.15:contrast=1.1"
-
-        # Foreground: scale to fit inside canvas (contain), keep sharp
+        # Blurred background: full video visible, edges filled with blurred copy
+        bg_scale = f"scale={w}*1.15:{h}*1.15:flags=lanczos"
+        bg_blur = "boxblur=20:20"
+        bg_dark = "eq=brightness=-0.12:contrast=1.05"
         if src_aspect > dst_aspect:
-            # Source is wider than target → fit to width
-            fg_scale = f"scale={w}:{h}*:flags=lanczos"
+            fg_scale = f"scale={w}*{min(1, dst_aspect/src_aspect):.2f}:{h}:flags=lanczos"
         else:
-            # Source is taller than target → fit to height
-            fg_scale = f"scale={w}*:{h}:flags=lanczos"
-
-        # Build overlay chain
-        vf_parts = [
-            f"[0:v]split=2[bg_src][fg_src];",
-            f"[bg_src]{bg_scale},{bg_blur},{bg_dark}[bg];",
-            f"[fg_src]{fg_scale}[fg];",
-            f"[bg][fg]overlay=(main_w-overlay_w)/2:(main_h-overlay_h)/2:format=auto",
-            f",fps={fps}",
-            f",format=yuv420p",
-        ]
+            fg_scale = f"scale={w}:{h}*{min(1, src_aspect/dst_aspect):.2f}:flags=lanczos"
+        vf_string = (
+            f"[0:v]split=2[bg_src][fg_src];"
+            f"[bg_src]{bg_scale},{bg_blur},{bg_dark}[bg];"
+            f"[fg_src]{fg_scale}[fg];"
+            f"[bg][fg]overlay=(main_w-overlay_w)/2:(main_h-overlay_h)/2:format=auto,"
+            f"fps={fps},format=yuv420p"
+        )
+        is_complex = True
 
     elif crop_mode == "face_track":
-        # Face-aware crop: detect face position, crop window follows it
-        # Falls back to center crop if no face detected
         face_data = _detect_face_region(source_path, start, duration)
         if face_data:
-            face_cx, face_cy = face_data["cx"], face_data["cy"]
-            # Scale so height fills, then crop width centered on face
-            scale_filter = f"scale=-2:{h}:flags=lanczos"
-            # Offset crop to keep face centered (clamped to video bounds)
-            x_offset = max(0, min(face_cx - w // 2, src_w - w))
-            crop_filter = f"crop={w}:{h}:{x_offset}:0"
-            vf_parts = [
-                scale_filter,
-                crop_filter,
-                f"fps={fps}",
-                f"format=yuv420p",
-            ]
-            logger.info("Face track: face at (%d,%d), crop x_offset=%d", face_cx, face_cy, x_offset)
+            face_cx = face_data["cx"]
+            scale_f = f"scale=-2:{h}:flags=lanczos"
+            x_off = max(0, min(face_cx - w // 2, src_w - w))
+            crop_f = f"crop={w}:{h}:{x_off}:0"
+            vf_string = f"{scale_f},{crop_f},fps={fps},format=yuv420p"
+            logger.info("Face track: face at (%d), crop x_offset=%d", face_cx, x_off)
         else:
-            # No face detected — fall back to blur_bg
             logger.info("Face track: no face detected, falling back to blur_bg")
-            bg_scale = f"scale={w}*1.2:{h}*1.2:flags=lanczos"
-            bg_blur = f"boxblur=20:20"
-            bg_dark = f"eq=brightness=-0.15:contrast=1.1"
-            if src_aspect > dst_aspect:
-                fg_scale = f"scale={w}:{h}*:flags=lanczos"
-            else:
-                fg_scale = f"scale={w}*:{h}:flags=lanczos"
-            vf_parts = [
-                f"[0:v]split=2[bg_src][fg_src];",
-                f"[bg_src]{bg_scale},{bg_blur},{bg_dark}[bg];",
-                f"[fg_src]{fg_scale}[fg];",
-                f"[bg][fg]overlay=(main_w-overlay_w)/2:(main_h-overlay_h)/2:format=auto",
-                f",fps={fps}",
-                f",format=yuv420p",
-            ]
-    else:
-        # Classic center crop (original behavior)
-        scale_filter = f"scale=-2:{h}:flags=lanczos"
-        crop_filter = f"crop={w}:{h}:(in_w-out_w)/2:0"
-        vf_parts = [
-            scale_filter,
-            crop_filter,
-            f"fps={fps}",
-            f"format=yuv420p",
-        ]
+            crop_mode = "blur_bg"  # fall through to blur_bg below
+            # re-use blur_bg code by setting is_complex after this block
+
+    if crop_mode in ("center_crop",) or (crop_mode == "face_track" and vf_string is None):
+        # Classic center crop (original behavior) OR face_track fallback
+        scale_f = f"scale=-2:{h}:flags=lanczos"
+        crop_f = f"crop={w}:{h}:(in_w-out_w)/2:0"
+        vf_string = f"{scale_f},{crop_f},fps={fps},format=yuv420p"
+
+    # Safety: if somehow vf_string wasn't set, fall back to center crop
+    if vf_string is None:
+        scale_f = f"scale=-2:{h}:flags=lanczos"
+        crop_f = f"crop={w}:{h}:(in_w-out_w)/2:0"
+        vf_string = f"{scale_f},{crop_f},fps={fps},format=yuv420p"
 
     # --- Captions (optional) -----------------------------------------------
     # Use ASS subtitles instead of drawtext — far more reliable on Windows.
@@ -1323,18 +1293,18 @@ def cut_clip(
 
     # Add ASS subtitle burning to filter chain
     if ass_file and os.path.isfile(ass_file):
-        # Use forward slashes for FFmpeg compatibility
         ass_path = ass_file.replace("\\", "/")
-        # Escape colons in the path (FFmpeg filter parser treats : as option separator)
-        # Use filename= sub-option to avoid parser confusion with original_size
         ass_path_escaped = ass_path.replace(":", "\\:")
-        # Use subtitles= filter (more standard, better supported than ass=)
-        # Pass fontsdir so libass can find custom fonts
         fonts_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "fonts")
         fonts_dir_escaped = fonts_dir.replace("\\", "/").replace(":", "\\:")
-        vf_parts.append(f"subtitles=filename='{ass_path_escaped}':fontsdir='{fonts_dir_escaped}'")
+        subtitle_filter = f"subtitles=filename='{ass_path_escaped}':fontsdir='{fonts_dir_escaped}'"
+        if is_complex:
+            # Insert subtitle filter before the fps/format ending
+            vf_string = vf_string.replace(f",fps={fps},format=yuv420p", f",{subtitle_filter},fps={fps},format=yuv420p")
+        else:
+            vf_string = vf_string + "," + subtitle_filter
+        logger.info("ASS subtitles added to filter chain")
 
-    vf_string = ",".join(vf_parts)
     logger.info("cut_clip vf: %s", vf_string[:200])
 
     # --- Build FFmpeg command ---------------------------------------------
@@ -1357,13 +1327,22 @@ def cut_clip(
     # Check if source has audio
     source_has_audio = _has_audio(source_path)
 
+    # Determine if this is a complex filter (uses labelled pins like [bg],[fg], overlay, split, etc.)
+    # Complex filters require -filter_complex instead of -vf
+    is_complex_filter = "[bg]" in vf_string or "[fg]" in vf_string or "overlay=" in vf_string or "split=" in vf_string
+
     cmd = [
         FFMPEG, "-y",
         "-ss", str(start),
         "-i", source_path,
         "-t", str(duration),
     ]
-    if vf_file:
+    if is_complex_filter:
+        if vf_file:
+            cmd += ["-filter_complex_script", vf_file]
+        else:
+            cmd += ["-filter_complex", vf_string]
+    elif vf_file:
         cmd += ["-filter_complex_script", vf_file]
     else:
         cmd += ["-vf", vf_string]
