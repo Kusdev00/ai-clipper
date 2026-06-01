@@ -2633,6 +2633,13 @@ function renderTimeline(highlights, totalDuration) {
 // PREVIEW / DOWNLOAD
 // ═══════════════════════════════════════════════════════════════════════════
 
+function previewBulkClip(jobId, clipIdx) {
+  const v = document.getElementById('prevVideo');
+  v.src = '/api/clip/' + jobId + '/' + clipIdx;
+  document.getElementById('previewModal').classList.add('visible');
+  v.play();
+}
+
 function previewClip(i) {
   const v = document.getElementById('prevVideo');
   v.src = '/api/clip/' + S.jobId + '/' + i;
@@ -2739,6 +2746,65 @@ function regenerateHashtags(i) {
     });
 }
 
+function downloadBulkClip(jobId, clipIdx) {
+  window.open('/api/clip/' + jobId + '/' + clipIdx + '?download=true', '_blank');
+}
+
+function regenerateCaptionBulk(i) {
+  const h = S.highlights[i];
+  if (!h) return;
+  const text = h.text || '';
+  if (!text) return toast('No transcript for this clip', 'err');
+  const capEl = document.getElementById('cap' + i);
+  if (capEl) capEl.textContent = 'Generating…';
+  fetch('/api/regenerate_caption/' + h._jobId + '/' + h._clipIdx, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: '{}',
+  })
+    .then(r => r.json())
+    .then(d => {
+      if (d.caption) {
+        h.caption = d.caption;
+        h.hashtags = d.hashtags || [];
+        if (capEl) capEl.textContent = d.caption.substring(0, 150) + (d.caption.length > 150 ? '…' : '');
+        const tagsEl = document.getElementById('tags' + i);
+        if (tagsEl) tagsEl.textContent = (h.hashtags.length > 0) ? h.hashtags.map(t => '#' + t).join(' ') : '';
+        toast('Caption regenerated!', 'ok');
+      }
+    })
+    .catch(() => {
+      toast('Regeneration failed', 'err');
+      if (capEl) capEl.textContent = (h.caption || text).substring(0, 150);
+    });
+}
+
+function regenerateHashtagsBulk(i) {
+  const h = S.highlights[i];
+  if (!h) return;
+  const text = h.text || '';
+  if (!text) return toast('No transcript for this clip', 'err');
+  const tagsEl = document.getElementById('tags' + i);
+  if (tagsEl) tagsEl.textContent = 'Generating…';
+  fetch('/api/regenerate_hashtags/' + h._jobId + '/' + h._clipIdx, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: '{}',
+  })
+    .then(r => r.json())
+    .then(d => {
+      if (d.hashtags) {
+        h.hashtags = d.hashtags;
+        if (tagsEl) tagsEl.textContent = (d.hashtags.length > 0) ? d.hashtags.map(t => '#' + t).join(' ') : '';
+        toast('Hashtags regenerated!', 'ok');
+      }
+    })
+    .catch(() => {
+      toast('Hashtag regeneration failed', 'err');
+      if (tagsEl) tagsEl.textContent = (h.hashtags && h.hashtags.length > 0) ? h.hashtags.map(t => '#' + t).join(' ') : '';
+    });
+}
+
 function regenerateAllCaptions() {
   if (!S.highlights || S.highlights.length === 0) return toast('No clips', 'err');
   S.highlights.forEach((h, i) => {
@@ -2753,8 +2819,10 @@ function downloadClip(i) {
 
 function downloadAllClips() {
   if (!S.highlights) return;
-  S.highlights.forEach((_, i) => {
-    setTimeout(() => downloadClip(i), i * 200);
+  S.highlights.forEach((h, i) => {
+    const jobId = h._jobId || S.jobId;
+    const clipIdx = h._clipIdx !== undefined ? h._clipIdx : i;
+    setTimeout(() => downloadBulkClip(jobId, clipIdx), i * 200);
   });
 }
 
@@ -2786,6 +2854,12 @@ async function startBulkUpload() {
   const btn = document.getElementById('bulkUploadBtn');
   btn.disabled = true;
   btn.textContent = '⏳ Uploading…';
+
+  // Accumulate all highlights across all files
+  const allHighlights = [];
+  let allChapters = [];
+  let totalDuration = 0;
+  let clipOffset = 0;
 
   for (let i = 0; i < _bulkFiles.length; i++) {
     const file = _bulkFiles[i];
@@ -2824,7 +2898,6 @@ async function startBulkUpload() {
 
       const highlights = await new Promise((resolve, reject) => {
         const es = new EventSource('/api/progress/' + data.job_id);
-        // Timeout after 5 minutes — if pipeline hangs, fail fast and continue
         const timer = setTimeout(() => { es.close(); reject(new Error('Pipeline timeout (5 min)')); }, 300000);
         es.addEventListener('update', (e) => {
           const d = JSON.parse(e.data);
@@ -2834,6 +2907,17 @@ async function startBulkUpload() {
         es.addEventListener('error', () => { clearTimeout(timer); es.close(); reject(new Error('SSE lost')); });
       });
 
+      // Tag each highlight with its source job info for preview/download/regenerate
+      highlights.forEach((h, idx) => {
+        h._jobId = data.job_id;
+        h._clipIdx = idx;
+        h._sourceFile = file.name;
+      });
+      allHighlights.push(...highlights);
+
+      // Collect chapters from each file
+      // (chapters are per-file, so we just use the last file's for display)
+
       statusEl.textContent = '✅';
       log(`Done: ${file.name} — ${highlights.length} clips`, 'ok');
     } catch (e) {
@@ -2842,11 +2926,80 @@ async function startBulkUpload() {
       log(`${file.name} failed: ${e.message}`, 'err');
     }
 
-      // Small delay between jobs to let Ollama breathe
-      if (i < _bulkFiles.length - 1) {
-        document.getElementById('bulkStatus').textContent = `Waiting 3s before next file…`;
-        await new Promise(r => setTimeout(r, 3000));
-      }
+    // Small delay between jobs to let Ollama breathe
+    if (i < _bulkFiles.length - 1) {
+      document.getElementById('bulkStatus').textContent = `Waiting 3s before next file…`;
+      await new Promise(r => setTimeout(r, 3000));
+    }
+  }
+
+  // Render all accumulated clips
+  if (allHighlights.length > 0) {
+    // Use the last job's ID for the main S.jobId (for clip download URLs)
+    // But each highlight already has _jobId and _clipIdx set correctly
+    S.highlights = allHighlights;
+    S.clips = [];
+
+    // Build a combined clips grid
+    const grid = document.getElementById('clipsGrid');
+    document.getElementById('clipCount').textContent = allHighlights.length + ' clips';
+    grid.innerHTML = '';
+    document.getElementById('empty').style.display = 'none';
+    document.getElementById('clipsSection').classList.add('visible');
+    document.getElementById('timelineWrap').classList.add('visible');
+
+    allHighlights.forEach((h, i) => {
+      if (!h.video_url && h.video_url !== 0) return;
+      const jobId = h._jobId;
+      const clipIdx = h._clipIdx;
+      const sc = vbClass(h.viral_score || 0);
+      const dur = (h.end - h.start) || 0;
+      h.text = h.text || '';
+      const htScore = h.hot_take_score || 0;
+      const htBadge = htScore >= 7 ? `<span class="badge-hot" title="Hot Take Score: ${htScore}/10">🔥 ${htScore}</span>` : '';
+      const chapterTitle = h.chapter_title ? `<span class="badge-chapter" title="Chapter">📖 ${h.chapter_title}</span>` : '';
+      const sourceLabel = h._sourceFile ? `<span style="font-family:var(--font-mono);font-size:9px;color:var(--text-muted);margin-left:4px;">📁 ${h._sourceFile}</span>` : '';
+      const card = document.createElement('div');
+      card.className = 'clip-card';
+      card.innerHTML = `
+        <div class="clip-preview" onclick="previewBulkClip('${jobId}',${clipIdx})">
+          <video src="/api/clip/${jobId}/${clipIdx}" preload="metadata" muted playsinline></video>
+          <span class="clip-badge-time">${fmtTime(h.start)} – ${fmtTime(h.end)}</span>
+          <div class="clip-badge-score ${sc}">${h.viral_score || 0}</div>
+        </div>
+        <div class="clip-info">
+          <div class="clip-time-row">
+            <span class="clip-duration">⏱ ${fmtTime(dur)}</span>
+            <span style="font-family:var(--font-mono);font-size:10px;color:var(--text-muted);">Hook: ${h.hook_type || 'none'}</span>
+            ${htBadge}${chapterTitle}${sourceLabel}
+          </div>
+          <div class="caption-box" id="captionBox${i}" onclick="copyCaption(${i})" title="Click to copy">
+            <button class="caption-copy-btn" onclick="event.stopPropagation();copyCaption(${i})">📋</button>
+            <div class="caption-text" id="cap${i}">${(h.caption || h.text || '').substring(0, 150)}${(h.caption||h.text||'').length > 150 ? '…' : ''}</div>
+            <div class="caption-tags" id="tags${i}">${(h.hashtags && h.hashtags.length > 0) ? h.hashtags.map(t => '#' + t).join(' ') : ''}</div>
+          </div>
+          <div class="virality-bars">
+            <div class="virality-row"><span class="virality-label">Hook</span><div class="virality-track"><div class="virality-fill hook" style="width:${(h.hook_score || 0) * 100}%;"></div></div><span class="virality-val">${Math.round((h.hook_score || 0) * 100)}</span></div>
+            <div class="virality-row"><span class="virality-label">Engage</span><div class="virality-track"><div class="virality-fill engage" style="width:${(h.engagement || 0) * 100}%;"></div></div><span class="virality-val">${Math.round((h.engagement || 0) * 100)}</span></div>
+            <div class="virality-row"><span class="virality-label">Value</span><div class="virality-track"><div class="virality-fill value" style="width:${(h.value || 0) * 100}%;"></div></div><span class="virality-val">${Math.round((h.value || 0) * 100)}</span></div>
+            <div class="virality-row"><span class="virality-label">Share</span><div class="virality-track"><div class="virality-fill share" style="width:${(h.shareability || 0) * 100}%;"></div></div><span class="virality-val">${Math.round((h.shareability || 0) * 100)}</span></div>
+          </div>
+          <div class="clip-actions">
+            <button class="btn btn-ghost btn-xs" onclick="previewBulkClip('${jobId}',${clipIdx})">Preview</button>
+            <button class="btn btn-ghost btn-xs" onclick="regenerateCaptionBulk(${i})" title="Regenerate caption + hashtags">🔄</button>
+            <button class="btn btn-ghost btn-xs" onclick="regenerateHashtagsBulk(${i})" title="Regenerate hashtags only">#️⃣</button>
+            <button class="btn btn-ghost btn-xs" onclick="downloadBulkClip('${jobId}',${clipIdx})">↓</button>
+          </div>
+        </div>
+      `;
+      grid.appendChild(card);
+    });
+
+    setStatus('Complete', 'ok');
+    log(`Bulk done: ${allHighlights.length} clips from ${_bulkFiles.length} files`, 'ok');
+  } else {
+    document.getElementById('bulkStatus').textContent = 'No clips generated';
+    log('Bulk done: no clips generated', 'warn');
   }
 
   _bulkRunning = false;
