@@ -2824,12 +2824,14 @@ async function startBulkUpload() {
 
       const highlights = await new Promise((resolve, reject) => {
         const es = new EventSource('/api/progress/' + data.job_id);
+        // Timeout after 5 minutes — if pipeline hangs, fail fast and continue
+        const timer = setTimeout(() => { es.close(); reject(new Error('Pipeline timeout (5 min)')); }, 300000);
         es.addEventListener('update', (e) => {
           const d = JSON.parse(e.data);
-          if (d.status === 'completed' && d.highlights) { es.close(); resolve(d.highlights); }
-          if (d.status === 'error') { es.close(); reject(new Error(d.error || 'pipeline error')); }
+          if (d.status === 'completed' && d.highlights) { clearTimeout(timer); es.close(); resolve(d.highlights); }
+          if (d.status === 'error') { clearTimeout(timer); es.close(); reject(new Error(d.error || 'pipeline error')); }
         });
-        es.addEventListener('error', () => { es.close(); reject(new Error('SSE lost')); });
+        es.addEventListener('error', () => { clearTimeout(timer); es.close(); reject(new Error('SSE lost')); });
       });
 
       statusEl.textContent = '✅';
@@ -2839,6 +2841,12 @@ async function startBulkUpload() {
       document.getElementById('bulkStatus').textContent = `Error: ${file.name} — ${e.message}`;
       log(`${file.name} failed: ${e.message}`, 'err');
     }
+
+      // Small delay between jobs to let Ollama breathe
+      if (i < _bulkFiles.length - 1) {
+        document.getElementById('bulkStatus').textContent = `Waiting 3s before next file…`;
+        await new Promise(r => setTimeout(r, 3000));
+      }
   }
 
   _bulkRunning = false;

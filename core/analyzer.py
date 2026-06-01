@@ -1097,7 +1097,7 @@ Respond in JSON format:
 Provide EXACTLY {target_chapters} chapters covering the ENTIRE {duration/60:.0f}-minute video."""
 
     try:
-        resp = chat_fn(prompt, temperature=0.2, timeout=300, num_ctx=16384)
+        resp = chat_fn(prompt, temperature=0.2, timeout=60, num_ctx=4096)
         match = re.search(r"\[.*\]", resp, re.DOTALL)
         if not match:
             return []
@@ -1138,7 +1138,7 @@ def _score_hot_takes_ollama(chat_fn, clips: list[dict]) -> list[dict]:
         prompt_parts.append(f"\nClip {i+1}: {text}")
 
     try:
-        resp = chat_fn("\n".join(prompt_parts), temperature=0.2)
+        resp = chat_fn("\n".join(prompt_parts), temperature=0.2, timeout=30)
         scores = []
         for line in resp.strip().split("\n"):
             nums = re.findall(r"\d+", line)
