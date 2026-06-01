@@ -1162,7 +1162,7 @@ def _build_glow_filter(src_w: int, src_h: int, w: int, h: int, fps: int, duratio
         f"w={fg_w + glow_pad * 2}:h={fg_h + glow_pad * 2}:"
         f"color={glow_color}@{glow_alpha}:t=fill[glow2];"
         f"[glow2][fg]overlay={ox}:{oy}:format=auto,"
-        f"fps={fps},format=yuv420p"
+        f"fps={fps},format=yuv420p[vglow]"
     )
 
     return filter_chain, True
@@ -1304,15 +1304,20 @@ def cut_clip(
         with open(vf_file, "w", encoding="utf-8") as vfh:
             vfh.write(vf_string)
             if vf_script:
-                # Append subtitle filter after the glow chain output
-                vfh.write(f";[vf]subtitles=filename='{ass_abs.replace(chr(92), '/').replace(chr(58), chr(92)+chr(58))}':fontsdir='{fonts_abs.replace(chr(92), '/').replace(chr(58), chr(92)+chr(58))}'[vfinal]\n")
-                # Rename output pad
-                vfh.write("[vfinal]\n")
-        cmd += ["-filter_complex_script", vf_file]
+                # Chain subtitles after glow output: [vglow]subtitles[outv]
+                sub_filter = f"[vglow]subtitles=filename='{ass_abs.replace(chr(92), '/').replace(chr(58), chr(92)+chr(58))}':fontsdir='{fonts_abs.replace(chr(92), '/').replace(chr(58), chr(92)+chr(58))}'[outv]"
+                vfh.write(f";{sub_filter}\n")
+        # Read the file content and pass via -filter_complex (not deprecated -filter_complex_script)
+        with open(vf_file, "r", encoding="utf-8") as vfh:
+            filter_content = vfh.read()
+        cmd += ["-filter_complex", filter_content]
     else:
-        cmd += ["-vf", vf_string]
         if vf_script:
-            cmd += ["-filter_complex_script", vf_script]
+            with open(vf_script, "r", encoding="utf-8") as sf:
+                sub_content = sf.read().strip()
+            cmd += ["-vf", f"{vf_string},{sub_content}"]
+        else:
+            cmd += ["-vf", vf_string]
 
     cmd += [
         "-c:v", "libx264", "-preset", "fast", "-b:v", preset["video_bitrate"],
