@@ -1221,9 +1221,13 @@ def cut_clip(
     # Crop mode: "blur_bg" (default) | "center_crop" | "face_track"
 
     # Read source aspect ratio to decide scaling strategy
-    src_info = _probe_video(source_path)
-    src_w = int(src_info["streams"][0].get("width", 1920))
-    src_h = int(src_info["streams"][0].get("height", 1080))
+    try:
+        src_info = _probe_video(source_path)
+        src_w = int(src_info["streams"][0].get("width", 1920))
+        src_h = int(src_info["streams"][0].get("height", 1080))
+    except Exception as exc:
+        logger.warning("Could not probe source video (%s), assuming 1920x1080", exc)
+        src_w, src_h = 1920, 1080
     src_aspect = src_w / src_h
     dst_aspect = w / h
 
@@ -1232,13 +1236,18 @@ def cut_clip(
 
     if crop_mode == "blur_bg":
         # Blurred background: full video visible, edges filled with blurred copy
-        bg_scale = f"scale={w}*1.15:{h}*1.15:flags=lanczos"
+        # Background: scale to fill entire canvas, blur, darken
+        bg_scale = f"scale={w*2}:{h*2}:flags=lanczos"
         bg_blur = "boxblur=20:20"
         bg_dark = "eq=brightness=-0.12:contrast=1.05"
+
+        # Foreground: scale to fit inside canvas (contain), keep sharp
+        # Force even dimensions with -2 (maintains aspect ratio)
         if src_aspect > dst_aspect:
-            fg_scale = f"scale={w}*{min(1, dst_aspect/src_aspect):.2f}:{h}:flags=lanczos"
+            fg_scale = f"scale={w}:-2:flags=lanczos"
         else:
-            fg_scale = f"scale={w}:{h}*{min(1, src_aspect/dst_aspect):.2f}:flags=lanczos"
+            fg_scale = f"scale=-2:{h}:flags=lanczos"
+
         vf_string = (
             f"[0:v]split=2[bg_src][fg_src];"
             f"[bg_src]{bg_scale},{bg_blur},{bg_dark}[bg];"
