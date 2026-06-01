@@ -1144,29 +1144,14 @@ def _build_glow_filter(src_w: int, src_h: int, w: int, h: int, fps: int, duratio
     ox = (w - fg_w) // 2
     oy = (h - fg_h) // 2
 
-    # Scale source to fill canvas for the blur/glow layer
-    # The glow needs to fill the whole canvas so it bleeds past the edges
-    if src_w / src_h > w / h:
-        blur_scale_h = h
-        blur_scale_w = int(src_w * h / src_h)
-    else:
-        blur_scale_w = w
-        blur_scale_h = int(src_h * w / src_w)
-    blur_scale_w -= blur_scale_w % 2
-    blur_scale_h -= blur_scale_h % 2
-
-    blur_ox = (w - blur_scale_w) // 2
-    blur_oy = (h - blur_scale_h) // 2
-
     filter_chain = (
         # Split input: one copy for base (sharp), one for glow (blurred)
         "[0:v]split=2[base][blur];"
-        # Glow layer: scale up, apply Gaussian blur, adjust brightness
-        f"[blur]scale={blur_scale_w}:{blur_scale_h}:flags=lanczos,"
-        f"gblur=sigma=25[glow];"
-        # Dark background base
+        # Glow layer: scale to full canvas, apply Gaussian blur
+        f"[blur]scale={w}:{h}:flags=lanczos,gblur=sigma=25[glow];"
+        # Base layer: scale to fit inside, pad to full canvas with dark background
         f"[base]scale={fg_w}:{fg_h}:flags=lanczos,"
-        f"pad={w}:{h}:{ox}:{oy}:color=black@0.9[basepad];"
+        f"pad={w}:{h}:{ox}:{oy}:color=black@0.85[basepad];"
         # Blend glow on top of base using screen mode for soft light effect
         f"[basepad][glow]blend=all_mode=screen:all_opacity=0.35,"
         f"fps={fps},format=yuv420p[vglow]"
@@ -1312,13 +1297,15 @@ def cut_clip(
 
     if is_complex:
         # Build the complex filter content
-        glow_filter = vf_string
+        filter_content = vf_string
         if vf_script:
-            # Chain subtitles: glow output -> subtitles -> final
-            sub_filter = f"[vglow]subtitles=filename='{ass_abs.replace(chr(92), '/').replace(chr(58), chr(92)+chr(58))}':fontsdir='{fonts_abs.replace(chr(92), '/').replace(chr(58), chr(92)+chr(58))}'"
-            filter_content = f"{glow_filter};{sub_filter}"
-        else:
-            filter_content = glow_filter
+            # Chain subtitles after blend output: [vglow]subtitles=...
+            with open(vf_script, "r", encoding="utf-8") as sf:
+                sub_filter = sf.read().strip()
+            # Replace the subtitle filter's input label with [vglow]
+            # The script contains: subtitles=filename='...':fontsdir='...'
+            # We need to prefix it with [vglow]
+            filter_content = f"{vf_string};[vglow]{sub_filter}"
         cmd += ["-filter_complex", filter_content]
     else:
         if vf_script:
