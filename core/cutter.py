@@ -1132,47 +1132,56 @@ def _blur_bg_opencv(source_path: str, output_path: str, start: float, duration: 
     """
     Fast blur_bg compositing using OpenCV + FFmpeg pipe.
 
-    Instead of FFmpeg's slow split+boxblur+overlay complex filter,
-    we do the compositing in OpenCV (highly optimized resize/blur)
-    and pipe raw frames to FFmpeg for H.264 encoding.
+    Per-frame: each frame is resized to fill canvas, blurred+darkened for
+    background, then the sharp (fit-inside) version is overlaid centered.
 
-    This is ~5-10x faster than the pure FFmpeg complex filter approach.
+    Two-pass approach for audio sync:
+      Pass 1: OpenCV composites frames → raw H.264 temp file (no audio)
+      Pass 2: FFmpeg muxes video + audio from source with accurate -ss seek
     """
     import tempfile
 
-    # Build FFmpeg encoder command — reads raw BGR frames from stdin
+    # Compute foreground dimensions (fit inside canvas, maintain aspect)
+    cap_probe = cv2.VideoCapture(source_path)
+    if not cap_probe.isOpened():
+        raise RuntimeError(f"Cannot open video: {source_path}")
+    src_w = int(cap_probe.get(cv2.CAP_PROP_FRAME_WIDTH))
+    src_h = int(cap_probe.get(cv2.CAP_PROP_FRAME_HEIGHT))
+    src_fps = cap_probe.get(cv2.CAP_PROP_FPS) or fps
+    cap_probe.release()
+
+    if src_w / src_h > w / h:
+        fg_w = w
+        fg_h = int(src_h * w / src_w)
+    else:
+        fg_h = h
+        fg_w = int(src_w * h / src_h)
+    fg_w -= fg_w % 2
+    fg_h -= fg_h % 2
+    ox = (w - fg_w) // 2
+    oy = (h - fg_h) // 2
+
+    # Pass 1: OpenCV compositing → H.264 temp file via FFmpeg pipe
+    tmp_video = os.path.join(tempfile.gettempdir(), f"blur_bg_{os.getpid()}_pass1.mp4")
+
     enc_cmd = [
         FFMPEG, "-y",
-        "-f", "rawvideo",
-        "-vcodec", "rawvideo",
+        "-f", "rawvideo", "-vcodec", "rawvideo",
         "-pix_fmt", "bgr24",
         "-s", f"{w}x{h}",
         "-r", str(fps),
-        "-i", "-",          # read frames from stdin
-    ]
-    # Also read source audio (extract just the clip segment)
-    if has_audio:
-        enc_cmd += [
-            "-ss", str(start),
-            "-i", source_path,
-            "-t", str(duration),
-            "-c:a", "aac", "-b:a", preset["audio_bitrate"],
-        ]
-    else:
-        enc_cmd += ["-an"]
-    enc_cmd += [
+        "-i", "-",
         "-c:v", "libx264",
-        "-preset", "ultrafast",   # speed over compression — we just need it fast
+        "-preset", "ultrafast",
         "-crf", "23",
         "-pix_fmt", "yuv420p",
-        "-movflags", "+faststart",
+        "-an",              # no audio in pass 1
         "-threads", "0",
-        output_path,
+        tmp_video,
     ]
 
-    logger.info("_blur_bg_opencv: starting OpenCV compositing → FFmpeg pipe")
+    logger.info("_blur_bg_opencv: pass 1 — compositing %dx%d → %dx%d", src_w, src_h, w, h)
 
-    # Start FFmpeg encoder process
     enc_proc = subprocess.Popen(
         enc_cmd,
         stdin=subprocess.PIPE,
@@ -1186,46 +1195,8 @@ def _blur_bg_opencv(source_path: str, output_path: str, start: float, duration: 
         if not cap.isOpened():
             raise RuntimeError(f"Cannot open video: {source_path}")
 
-        src_w = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
-        src_h = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
-        src_fps = cap.get(cv2.CAP_PROP_FPS) or fps
-
-        # Seek to start
         start_frame = int(start * src_fps)
         cap.set(cv2.CAP_PROP_POS_FRAMES, start_frame)
-
-        # Pre-compute the background (blurred + darkened full frame)
-        # We only need to do this once — bg doesn't change between frames
-        # Read one frame to build the bg template
-        ret, sample_frame = cap.read()
-        if not ret:
-            raise RuntimeError("Cannot read first frame for background")
-
-        # Build background: resize to fill canvas, blur, darken
-        bg = cv2.resize(sample_frame, (w, h), interpolation=cv2.INTER_LINEAR)
-        bg = cv2.GaussianBlur(bg, (21, 21), 0)
-        bg = cv2.convertScaleAbs(bg, alpha=0.88, beta=-10)  # darken slightly
-
-        # Compute foreground dimensions (fit inside canvas, maintain aspect)
-        if src_w / src_h > w / h:
-            # Width-constrained
-            fg_w = w
-            fg_h = int(src_h * w / src_w)
-        else:
-            # Height-constrained
-            fg_h = h
-            fg_w = int(src_w * h / src_h)
-        # Ensure even
-        fg_w -= fg_w % 2
-        fg_h -= fg_h % 2
-
-        # Position foreground centered on background
-        ox = (w - fg_w) // 2
-        oy = (h - fg_h) // 2
-
-        # Seek back to start for real processing
-        cap.set(cv2.CAP_PROP_POS_FRAMES, start_frame)
-
         total_frames = int(duration * src_fps)
         frame_idx = 0
 
@@ -1238,15 +1209,16 @@ def _blur_bg_opencv(source_path: str, output_path: str, start: float, duration: 
             if elapsed > duration:
                 break
 
-            # Start with blurred background
-            canvas = bg.copy()
+            # Background: this frame resized to fill, blurred + darkened
+            bg = cv2.resize(frame, (w, h), interpolation=cv2.INTER_LINEAR)
+            bg = cv2.GaussianBlur(bg, (31, 31), 0)
+            bg = cv2.convertScaleAbs(bg, alpha=0.85, beta=-12)
 
-            # Resize foreground and overlay
+            # Foreground: this frame resized to fit inside, sharp
             fg = cv2.resize(frame, (fg_w, fg_h), interpolation=cv2.INTER_LINEAR)
-            canvas[oy:oy+fg_h, ox:ox+fg_w] = fg
+            bg[oy:oy+fg_h, ox:ox+fg_w] = fg
 
-            # Write raw BGR frame to FFmpeg stdin
-            enc_proc.stdin.write(canvas.tobytes())
+            enc_proc.stdin.write(bg.tobytes())
 
             frame_idx += 1
             if progress_callback and frame_idx % 15 == 0:
@@ -1256,20 +1228,18 @@ def _blur_bg_opencv(source_path: str, output_path: str, start: float, duration: 
         cap.release()
         enc_proc.stdin.close()
 
-        # Wait for FFmpeg to finish encoding
         try:
             _, stderr_data = enc_proc.communicate(timeout=300)
         except subprocess.TimeoutExpired:
             enc_proc.kill()
             enc_proc.wait()
-            raise RuntimeError("FFmpeg encoding timed out after 300s")
+            raise RuntimeError("FFmpeg pass 1 timed out after 300s")
 
         if enc_proc.returncode != 0:
             err_tail = (stderr_data or b"")[-2000:].decode("utf-8", errors="replace")
-            raise RuntimeError(f"FFmpeg encode failed (rc={enc_proc.returncode}):\n{err_tail}")
+            raise RuntimeError(f"FFmpeg pass 1 failed (rc={enc_proc.returncode}):\n{err_tail}")
 
     except Exception:
-        # Clean up on error
         try:
             enc_proc.stdin.close()
         except Exception:
@@ -1278,10 +1248,49 @@ def _blur_bg_opencv(source_path: str, output_path: str, start: float, duration: 
         enc_proc.wait()
         raise
 
+    logger.info("_blur_bg_opencv: pass 1 done, %d frames", frame_idx)
+
+    # Pass 2: mux video + audio with accurate seek
+    # Use -ss before -i for fast seek, -copyts to preserve timestamps
+    cmd2 = [
+        FFMPEG, "-y",
+        "-i", tmp_video,                    # video input (no audio)
+        "-ss", str(start),                  # seek in source for audio
+        "-i", source_path,
+        "-t", str(duration),
+        "-map", "0:v",                      # video from pass 1
+        "-map", "1:a?",                     # audio from source (optional)
+        "-c:v", "copy",                     # don't re-encode video
+    ]
+    if has_audio:
+        cmd2 += ["-c:a", "aac", "-b:a", preset["audio_bitrate"]]
+    else:
+        cmd2 += ["-an"]
+    cmd2 += [
+        "-movflags", "+faststart",
+        "-shortest",                        # end when shortest stream ends
+        output_path,
+    ]
+
+    logger.info("_blur_bg_opencv: pass 2 — muxing audio")
+
+    result2 = subprocess.run(cmd2, capture_output=True, text=True, timeout=120, env=ffmpeg_env)
+
+    # Cleanup temp file
+    if os.path.isfile(tmp_video):
+        try:
+            os.remove(tmp_video)
+        except OSError:
+            pass
+
+    if result2.returncode != 0:
+        err_tail = (result2.stderr or "")[-2000:]
+        raise RuntimeError(f"FFmpeg pass 2 (audio mux) failed: {err_tail}")
+
     if progress_callback:
         progress_callback(100.0)
 
-    logger.info("_blur_bg_opencv: done, %d frames composited", frame_idx)
+    logger.info("_blur_bg_opencv: done → %s", output_path)
     return output_path
 
 
