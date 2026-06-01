@@ -35,8 +35,40 @@ source venv/bin/activate  # Linux/Mac
 
 # Install dependencies
 pip install -r requirements.txt
+```
 
-# Run
+### Ollama Setup (AI Captions)
+
+The easiest way — run the setup script:
+
+```bash
+# Default model (llama3.1:8b)
+bash scripts/setup-ollama.sh
+
+# Or specify a different model
+bash scripts/setup-ollama.sh llama3.1:8b
+```
+
+The script will:
+1. Install Ollama if not present (Linux/macOS)
+2. Start the Ollama server
+3. Download the model
+4. Verify everything works
+
+**Manual install:** Download from https://ollama.com/download, then run:
+```bash
+ollama pull llama3.1:8b
+ollama serve
+```
+
+**Windows:** Install from https://ollama.com/download, then in PowerShell:
+```powershell
+ollama pull llama3.1:8b
+```
+
+### Run AI Clipper
+
+```bash
 python main.py
 ```
 
