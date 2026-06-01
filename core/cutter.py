@@ -1236,9 +1236,10 @@ def cut_clip(
 
     if crop_mode == "blur_bg":
         # Blurred background: full video visible, edges filled with blurred copy
-        # Background: scale to fill entire canvas, blur, darken
-        bg_scale = f"scale={w*2}:{h*2}:flags=lanczos"
-        bg_blur = "boxblur=20:20"
+        # Background: scale to fill, blur, darken
+        # Use smaller blur radius + lower res for speed
+        bg_scale = f"scale={w}:{h}:flags=lanczos"
+        bg_blur = "boxblur=10:10"
         bg_dark = "eq=brightness=-0.12:contrast=1.05"
 
         # Foreground: scale to fit inside canvas (contain), keep sharp
