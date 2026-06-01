@@ -15,6 +15,8 @@ from __future__ import annotations
 import os
 import re
 import logging
+import subprocess
+import time
 import requests
 
 logger = logging.getLogger(__name__)
@@ -57,6 +59,31 @@ def chat(prompt: str, system: str | None = None, temperature: float = 0.3, timeo
 def generate(prompt: str, system: str | None = None, temperature: float = 0.3) -> str:
     """Alias for chat()."""
     return chat(prompt, system=system, temperature=temperature)
+
+
+def ensure_ollama() -> bool:
+    """Ensure Ollama is running before starting the pipeline. Returns True if available."""
+    if is_available():
+        return True
+    logger.warning("Ollama not reachable at %s — attempting to start...", OLLAMA_URL)
+    try:
+        subprocess.Popen(
+            ["ollama", "serve"],
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+            creationflags=subprocess.CREATE_NO_WINDOW if os.name == "nt" else 0,
+        )
+        # Wait for Ollama to become ready
+        for _ in range(10):
+            time.sleep(2)
+            if is_available():
+                logger.info("Ollama started successfully")
+                return True
+    except FileNotFoundError:
+        logger.warning("ollama command not found — install Ollama to use AI captions")
+    except Exception as exc:
+        logger.warning("Failed to start Ollama: %s", exc)
+    return False
 
 
 def generate_tiktok_caption(transcript_text: str, video_title: str = "") -> str:

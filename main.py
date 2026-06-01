@@ -925,6 +925,15 @@ def main():
 
     utils.ensure_dirs(DOWNLOADS_DIR, CLIPS_DIR)
 
+    # Check Ollama availability (non-blocking)
+    from core.ollama_client import is_available as ollama_available, ensure_ollama
+    if ollama_available():
+        print("✅ Ollama is running — AI captions enabled")
+    elif ensure_ollama():
+        print("✅ Ollama started — AI captions enabled")
+    else:
+        print("⚠️  Ollama unavailable — captions will use transcript fallback")
+
     # Check if running on Windows
     if os.name == "nt":
         print("✅ Running on Windows")
