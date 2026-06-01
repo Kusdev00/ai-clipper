@@ -674,6 +674,17 @@ def pipeline_worker(job_id: str, options: dict):
     if use_ollama:
         os.environ["OLLAMA_MODEL"] = ollama_model
         os.environ["OLLAMA_URL"] = ollama_url
+        # Keep Ollama model loaded — ping before pipeline starts to avoid
+        # "model unloaded" issues between bulk jobs
+        try:
+            from core.ollama_client import keepalive, is_available
+            if is_available():
+                keepalive()
+                log.info("Ollama keepalive ping sent — model kept loaded")
+            else:
+                log.warning("Ollama not reachable at pipeline start")
+        except Exception as exc:
+            log.warning("Ollama keepalive failed: %s", exc)
 
     source_path = ""
 

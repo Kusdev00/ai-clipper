@@ -23,13 +23,55 @@ logger = logging.getLogger(__name__)
 
 OLLAMA_URL = os.getenv("OLLAMA_URL", "http://localhost:11434")
 OLLAMA_MODEL = os.getenv("OLLAMA_MODEL", "llama3.1:8b")
-OLLAMA_TIMEOUT = int(os.getenv("OLLAMA_TIMEOUT", "120"))
+OLLAMA_TIMEOUT = int(os.getenv("OLLAMA_TIMEOUT", "180"))
+
+
+_ollama_session = None
+
+def _get_session():
+    """Get a requests Session with connection pooling for Ollama."""
+    global _ollama_session
+    if _ollama_session is None:
+        _ollama_session = requests.Session()
+        adapter = requests.adapters.HTTPAdapter(
+            pool_connections=4,
+            pool_maxsize=8,
+            max_retries=requests.adapters.Retry(total=2, backoff_factor=0.5),
+        )
+        _ollama_session.mount("http://", adapter)
+        _ollama_session.mount("https://", adapter)
+    return _ollama_session
 
 
 def is_available() -> bool:
-    """Check if Ollama server is reachable and responsive."""
+    """Check if Ollama server is reachable and responsive (with retry)."""
+    session = _get_session()
+    for attempt in range(3):
+        try:
+            r = session.get(f"{OLLAMA_URL}/api/tags", timeout=5)
+            if r.status_code == 200:
+                return True
+        except Exception:
+            if attempt < 2:
+                time.sleep(1)
+    return False
+
+
+def keepalive() -> bool:
+    """Ping Ollama with a tiny request to keep the model loaded in memory.
+    Call this before starting a new pipeline to prevent model unload between jobs."""
+    session = _get_session()
     try:
-        r = requests.get(f"{OLLAMA_URL}/api/tags", timeout=3)
+        r = session.post(
+            f"{OLLAMA_URL}/api/generate",
+            json={
+                "model": OLLAMA_MODEL,
+                "prompt": "ok",
+                "stream": False,
+                "options": {"num_predict": 1, "temperature": 0},
+            },
+            timeout=30,
+        )
         return r.status_code == 200
     except Exception:
         return False
@@ -47,7 +89,8 @@ def chat(prompt: str, system: str | None = None, temperature: float = 0.3, timeo
         payload["system"] = system
 
     logger.debug("Ollama request: model=%s prompt_len=%d", OLLAMA_MODEL, len(prompt))
-    r = requests.post(
+    session = _get_session()
+    r = session.post(
         f"{OLLAMA_URL}/api/generate",
         json=payload,
         timeout=timeout or OLLAMA_TIMEOUT,

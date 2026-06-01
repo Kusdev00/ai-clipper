@@ -2807,8 +2807,13 @@ async function startBulkUpload() {
         num_clips: parseInt(document.getElementById('oNumClips').value) || 5,
         caption_style: document.getElementById('oCapStyle').value,
         whisper_model: document.getElementById('oWhisper').value,
-        use_ollama: false,
+        use_ollama: document.getElementById('oOllama')?.checked ?? false,
+        caption_mode: document.getElementById('oCaptionMode')?.value || 'full',
+        ollama_url: document.getElementById('ollamaUrl')?.value || 'http://localhost:11434',
+        ollama_model: document.getElementById('ollamaModel')?.value || 'llama3.1:8b',
         face_crop: document.getElementById('oFace').checked,
+        face_track: document.getElementById('oFace').checked,
+        smart_crop: document.getElementById('oFace').checked,
       };
 
       await fetch('/api/start_job/' + data.job_id, {
