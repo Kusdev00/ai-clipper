@@ -886,8 +886,9 @@ def pipeline_worker(job_id: str, options: dict):
                     h["caption"] = (h.get("text", "") or "")[:200]
                 h["hashtags"] = []
 
-        # Filter out highlights that are too short (< 5s) — ffmpeg would reject them
-        highlights = [h for h in highlights if (h.get("end", 0) - h.get("start", 0)) >= 5.0]
+        # Filter out highlights that are too short — minimum 3s for short videos, 5s for longer
+        min_dur = 3.0 if duration < 30 else 5.0
+        highlights = [h for h in highlights if (h.get("end", 0) - h.get("start", 0)) >= min_dur]
         highlights = highlights[:num_clips]
 
         job["message"] = f"Found {len(highlights)} highlights – generating clips …"

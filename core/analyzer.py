@@ -819,7 +819,7 @@ def find_highlights(
 
     # Generate candidate clips around exciting moments
     candidates: list[dict] = []
-    MIN_CLIP_SPACING = max(15.0, min(30.0, duration * 0.3))  # at least 15s, at most 30s, or 30% of duration
+    MIN_CLIP_SPACING = max(5.0, min(15.0, duration * 0.2))  # at least 5s, at most 15s, or 20% of duration
 
     for i, scene in enumerate(scenes):
         st = scene["time"]
