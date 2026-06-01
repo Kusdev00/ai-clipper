@@ -1299,17 +1299,14 @@ def cut_clip(
     cmd = [FFMPEG, "-y", "-ss", str(start), "-i", source_path, "-t", str(duration)]
 
     if is_complex:
-        # Write complex filter to temp file, append subtitles if needed
-        vf_file = os.path.join(_tf.gettempdir(), f"vf_{job_id}_{clip_id}.txt")
-        with open(vf_file, "w", encoding="utf-8") as vfh:
-            vfh.write(vf_string)
-            if vf_script:
-                # Chain subtitles after glow output: [vglow]subtitles[outv]
-                sub_filter = f"[vglow]subtitles=filename='{ass_abs.replace(chr(92), '/').replace(chr(58), chr(92)+chr(58))}':fontsdir='{fonts_abs.replace(chr(92), '/').replace(chr(58), chr(92)+chr(58))}'[outv]"
-                vfh.write(f";{sub_filter}\n")
-        # Read the file content and pass via -filter_complex (not deprecated -filter_complex_script)
-        with open(vf_file, "r", encoding="utf-8") as vfh:
-            filter_content = vfh.read()
+        # Build the complex filter content
+        glow_filter = vf_string
+        if vf_script:
+            # Chain subtitles: glow output -> subtitles -> final
+            sub_filter = f"[vglow]subtitles=filename='{ass_abs.replace(chr(92), '/').replace(chr(58), chr(92)+chr(58))}':fontsdir='{fonts_abs.replace(chr(92), '/').replace(chr(58), chr(92)+chr(58))}'"
+            filter_content = f"{glow_filter};{sub_filter}"
+        else:
+            filter_content = glow_filter
         cmd += ["-filter_complex", filter_content]
     else:
         if vf_script:
@@ -1394,7 +1391,7 @@ def cut_clip(
     except Exception as exc:
         raise RuntimeError(f"FFmpeg error: {exc}")
     finally:
-        for tmp_f in [vf_file if is_complex else None, vf_script, ass_file]:
+        for tmp_f in [vf_script, ass_file]:
             if tmp_f and os.path.isfile(tmp_f):
                 try:
                     os.remove(tmp_f)
