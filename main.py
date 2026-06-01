@@ -924,6 +924,7 @@ def pipeline_worker(job_id: str, options: dict):
                     brand_template=templates,
                     face_track=face_track and smart_crop,
                     progress_callback=on_clip_prog if len(highlights) > 1 else None,
+                    crop_mode=options.get("crop_mode", "blur_bg"),
                 )
                 clips[i] = clip_path
                 job["message"] = f"Generated clip {i + 1} / {len(highlights)}"

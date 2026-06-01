@@ -2021,6 +2021,19 @@ textarea.input-field {
           </select>
         </div>
       </div>
+      <div class="option-row">
+        <div class="option-info">
+          <div class="option-label">Crop Style</div>
+          <div class="option-hint">How to fill the 9:16 frame</div>
+        </div>
+        <div class="option-control">
+          <select class="select-field" id="oCropMode" style="width:120px;">
+            <option value="blur_bg">Blur BG</option>
+            <option value="center_crop">Center Crop</option>
+            <option value="face_track">Face Track</option>
+          </select>
+        </div>
+      </div>
       <div class="status-row" id="ollamaStatusRow">
         <div class="status-pill">
           <span class="status-dot" id="ollamaDot" style="background:var(--text-muted);animation:none;"></span>
@@ -2405,6 +2418,7 @@ async function generateClips() {
     whisper_model: document.getElementById('oWhisper').value,
     brand_template: S.brand,
     use_ollama: document.getElementById('oOllama').checked,
+    crop_mode: document.getElementById('oCropMode')?.value || 'blur_bg',
     caption_mode: document.getElementById('oCaptionMode')?.value || 'full',
     ollama_url: document.getElementById('ollamaUrl')?.value || 'http://localhost:11434',
     ollama_model: document.getElementById('ollamaModel')?.value || 'llama3.1:8b',
@@ -2882,6 +2896,7 @@ async function startBulkUpload() {
         caption_style: document.getElementById('oCapStyle').value,
         whisper_model: document.getElementById('oWhisper').value,
         use_ollama: document.getElementById('oOllama')?.checked ?? false,
+        crop_mode: document.getElementById('oCropMode')?.value || 'blur_bg',
         caption_mode: document.getElementById('oCaptionMode')?.value || 'full',
         ollama_url: document.getElementById('ollamaUrl')?.value || 'http://localhost:11434',
         ollama_model: document.getElementById('ollamaModel')?.value || 'llama3.1:8b',

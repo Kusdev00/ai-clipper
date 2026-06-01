@@ -362,7 +362,72 @@ def _has_audio(filepath: str) -> bool:
         return True
 
 
-def _escape_drawtext(text: str) -> str:
+def _detect_face_region(source_path: str, start: float, duration: float) -> Optional[dict]:
+    """Detect the dominant face position in a video clip using OpenCV Haar cascade.
+
+    Returns dict with face center (cx, cy) relative to the source video dimensions,
+    or None if no face is detected.
+    """
+    try:
+        import cv2
+    except ImportError:
+        logger.warning("OpenCV not available for face detection")
+        return None
+
+    # Load Haar cascade — ships with OpenCV
+    cascade_path = cv2.data.haarcascades + "haarcascade_frontalface_default.xml"
+    if not os.path.isfile(cascade_path):
+        logger.warning("Haar cascade not found at %s", cascade_path)
+        return None
+
+    cap = None
+    try:
+        cap = cv2.VideoCapture(source_path)
+        if not cap.isOpened():
+            return None
+
+        fps = cap.get(cv2.CAP_PROP_FPS) or 30
+        total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
+
+        # Sample 5 evenly-spaced frames from the clip
+        clip_start_frame = int(start * fps)
+        clip_end_frame = int((start + duration) * fps)
+        clip_end_frame = min(clip_end_frame, total_frames)
+        sample_count = min(5, max(1, (clip_end_frame - clip_start_frame) // int(fps)))
+        step = max(1, (clip_end_frame - clip_start_frame) // sample_count)
+
+        cascade = cv2.CascadeClassifier(cascade_path)
+        faces_all = []
+        vid_w = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
+        vid_h = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
+
+        for i in range(sample_count):
+            frame_idx = clip_start_frame + i * step
+            cap.set(cv2.CAP_PROP_POS_FRAMES, frame_idx)
+            ret, frame = cap.read()
+            if not ret:
+                continue
+
+            gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+            faces = cascade.detectMultiScale(gray, scaleFactor=1.1, minNeighbors=5, minSize=(30, 30))
+            for (x, y, w, h) in faces:
+                faces_all.append((x + w // 2, y + h // 2))  # center of each face
+
+        if not faces_all:
+            return None
+
+        # Return average face center
+        avg_x = sum(f[0] for f in faces_all) // len(faces_all)
+        avg_y = sum(f[1] for f in faces_all) // len(faces_all)
+        logger.info("Face detected: (%d,%d) from %d samples", avg_x, avg_y, len(faces_all))
+        return {"cx": avg_x, "cy": avg_y, "vid_w": vid_w, "vid_h": vid_h}
+
+    except Exception as exc:
+        logger.warning("Face detection failed: %s", exc)
+        return None
+    finally:
+        if cap is not None:
+            cap.release()
     """Escape a string for FFmpeg drawtext filter.
 
     Single quotes break drawtext's text='...' syntax, so we strip them.
@@ -1072,6 +1137,7 @@ def cut_clip(
     brand_template: Optional[str] = None,
     face_track: bool = True,
     progress_callback: Optional[Callable[[float], None]] = None,
+    crop_mode: str = "blur_bg",
 ) -> str:
     """
     Extract a clip from *source_path*, reformat for *platform*, optionally
@@ -1097,6 +1163,11 @@ def cut_clip(
         Name of a brand template preset (see ``BRAND_TEMPLATE_PRESETS``).
     face_track : bool
         If True, use face-aware cropping instead of centre crop.
+    crop_mode : str
+        How to handle aspect ratio conversion to 9:16:
+        - "blur_bg" (default) — blurred background fill, no black bars, no lost content
+        - "center_crop" — classic center crop (may cut off edges)
+        - "face_track" — detect faces and keep them centered
     progress_callback : callable | None
         Called with a float 0-100 indicating progress.
 
@@ -1147,22 +1218,91 @@ def cut_clip(
     output_path = os.path.join(clip_dir, output_filename)
 
     # --- Build video filter chain -----------------------------------------
-    # Convert 16:9 horizontal → 9:16 vertical without stretching:
-    # 1. Scale so height fills the target (maintains aspect ratio)
-    # 2. Crop the width from center to target
-    # This gives a clean center crop, no stretching
-    scale_filter = f"scale=-2:{h}:flags=lanczos"  # -2 = maintain aspect, height=h
-    crop_filter = f"crop={w}:{h}:(in_w-out_w)/2:0"  # center horizontally, top vertically
-    pad_filter = f"pad={w}:{h}:(ow-iw)/2:(oh-ih)/2"  # fallback if source is narrower
+    # Crop mode: "blur_bg" (default) | "center_crop" | "face_track"
 
-    # Use scale+crop for landscape→portrait (most common case)
-    # If source is already portrait, just scale to fit
-    vf_parts: list[str] = [
-        scale_filter,
-        crop_filter,
-        f"fps={fps}",
-        "format=yuv420p",
-    ]
+    # Read source aspect ratio to decide scaling strategy
+    src_info = _probe_video(source_path)
+    src_w = int(src_info["streams"][0].get("width", 1920))
+    src_h = int(src_info["streams"][0].get("height", 1080))
+    src_aspect = src_w / src_h
+    dst_aspect = w / h
+
+    if crop_mode == "blur_bg":
+        # Blurred background approach:
+        # 1. Scale source so it FILLS the target (cover), crop excess
+        # 2. Blur that scaled version heavily → background layer
+        # 3. Scale source to FIT inside target (contain), overlay centered on top
+        # Result: no black bars, no lost content, blurred edges fill canvas
+
+        # Background: scale to fill entire canvas, blur, darken
+        bg_scale = f"scale={w}*1.2:{h}*1.2:flags=lanczos"
+        bg_blur = f"boxblur=20:20"
+        bg_dark = f"eq=brightness=-0.15:contrast=1.1"
+
+        # Foreground: scale to fit inside canvas (contain), keep sharp
+        if src_aspect > dst_aspect:
+            # Source is wider than target → fit to width
+            fg_scale = f"scale={w}:{h}*:flags=lanczos"
+        else:
+            # Source is taller than target → fit to height
+            fg_scale = f"scale={w}*:{h}:flags=lanczos"
+
+        # Build overlay chain
+        vf_parts = [
+            f"[0:v]split=2[bg_src][fg_src];",
+            f"[bg_src]{bg_scale},{bg_blur},{bg_dark}[bg];",
+            f"[fg_src]{fg_scale}[fg];",
+            f"[bg][fg]overlay=(main_w-overlay_w)/2:(main_h-overlay_h)/2:format=auto",
+            f",fps={fps}",
+            f",format=yuv420p",
+        ]
+
+    elif crop_mode == "face_track":
+        # Face-aware crop: detect face position, crop window follows it
+        # Falls back to center crop if no face detected
+        face_data = _detect_face_region(source_path, start, duration)
+        if face_data:
+            face_cx, face_cy = face_data["cx"], face_data["cy"]
+            # Scale so height fills, then crop width centered on face
+            scale_filter = f"scale=-2:{h}:flags=lanczos"
+            # Offset crop to keep face centered (clamped to video bounds)
+            x_offset = max(0, min(face_cx - w // 2, src_w - w))
+            crop_filter = f"crop={w}:{h}:{x_offset}:0"
+            vf_parts = [
+                scale_filter,
+                crop_filter,
+                f"fps={fps}",
+                f"format=yuv420p",
+            ]
+            logger.info("Face track: face at (%d,%d), crop x_offset=%d", face_cx, face_cy, x_offset)
+        else:
+            # No face detected — fall back to blur_bg
+            logger.info("Face track: no face detected, falling back to blur_bg")
+            bg_scale = f"scale={w}*1.2:{h}*1.2:flags=lanczos"
+            bg_blur = f"boxblur=20:20"
+            bg_dark = f"eq=brightness=-0.15:contrast=1.1"
+            if src_aspect > dst_aspect:
+                fg_scale = f"scale={w}:{h}*:flags=lanczos"
+            else:
+                fg_scale = f"scale={w}*:{h}:flags=lanczos"
+            vf_parts = [
+                f"[0:v]split=2[bg_src][fg_src];",
+                f"[bg_src]{bg_scale},{bg_blur},{bg_dark}[bg];",
+                f"[fg_src]{fg_scale}[fg];",
+                f"[bg][fg]overlay=(main_w-overlay_w)/2:(main_h-overlay_h)/2:format=auto",
+                f",fps={fps}",
+                f",format=yuv420p",
+            ]
+    else:
+        # Classic center crop (original behavior)
+        scale_filter = f"scale=-2:{h}:flags=lanczos"
+        crop_filter = f"crop={w}:{h}:(in_w-out_w)/2:0"
+        vf_parts = [
+            scale_filter,
+            crop_filter,
+            f"fps={fps}",
+            f"format=yuv420p",
+        ]
 
     # --- Captions (optional) -----------------------------------------------
     # Use ASS subtitles instead of drawtext — far more reliable on Windows.
@@ -1349,6 +1489,15 @@ def _resolve_font_path(font_name: str) -> Optional[str]:
                 if fl.startswith(name_lower) and f.endswith((".ttf", ".otf")):
                     return os.path.join(root, f)
     return None
+
+
+def _escape_drawtext(text: str) -> str:
+    """Escape a string for FFmpeg drawtext filter.
+
+    Single quotes break drawtext's text='...' syntax, so we strip them.
+    Also escape backslashes and colons.
+    """
+    return text.replace("\\", "\\\\").replace("'", "").replace(":", "\\:").replace("%", "%%")
 
 
 def _build_logo_filter(brand: BrandTemplate, vid_w: int, vid_h: int) -> Optional[str]:
