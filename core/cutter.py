@@ -1431,26 +1431,27 @@ def cut_clip(
                          "-c:a", "aac", "-b:a", preset["audio_bitrate"]]
             else:
                 cmd2 += ["-an"]
+            vf_script = None
             if ass_file and os.path.isfile(ass_file):
-                # FFmpeg filter graph treats ':' as separator, so drive letter colons
-                # must be escaped with a single backslash: C:\path → C\:/path
-                # Since we use subprocess (no shell), Python string \: = literal \:
+                # Write filter to temp file to avoid Windows path escaping nightmares.
+                # FFmpeg's filter_graph parser treats ':' as separator, and Windows
+                # paths (C:\...) trigger it. A filter_script file bypasses all of that.
                 ass_abs = os.path.abspath(ass_file)
-                fonts_abs = os.path.abspath(os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "fonts"))
-                # Forward slashes for path separators, escape only the drive colon
-                ass_fwd = ass_abs[0] + "\\:" + ass_abs[2:] if len(ass_abs) > 2 and ass_abs[1] == ":" else ass_abs
-                fonts_fwd = fonts_abs[0] + "\\:" + fonts_abs[2:] if len(fonts_abs) > 2 and fonts_abs[1] == ":" else fonts_abs
-                ass_fwd = ass_fwd.replace("\\", "/")
-                fonts_fwd = fonts_fwd.replace("\\", "/")
-                sub_filter = f"subtitles=filename='{ass_fwd}':fontsdir='{fonts_fwd}'"
-                cmd2 += ["-vf", sub_filter]
+                fonts_abs = os.path.abspath(os.path.join(
+                    os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "fonts"))
+                vf_script = os.path.join(tempfile.gettempdir(), f"vf_sub_{job_id}_{clip_id}.txt")
+                with open(vf_script, "w", encoding="utf-8") as vfh:
+                    ass_p = ass_abs.replace("\\", "/").replace(":", "\\:")
+                    fonts_p = fonts_abs.replace("\\", "/").replace(":", "\\:")
+                    vfh.write(f"subtitles=filename='{ass_p}':fontsdir='{fonts_p}'\n")
+                cmd2 += ["-filter_complex_script", vf_script]
             else:
                 cmd2 += ["-c:v", "libx264", "-preset", "fast"]
             cmd2 += ["-c:v", "libx264", "-preset", "fast", "-b:v", preset["video_bitrate"],
                      "-movflags", "+faststart", "-pix_fmt", "yuv420p", "-threads", "0", output_path]
             result2 = subprocess.run(cmd2, capture_output=True, text=True, timeout=300, env=ffmpeg_env)
             # Cleanup
-            for f in [tmp_composite, ass_file]:
+            for f in [tmp_composite, ass_file, vf_script]:
                 if f and os.path.isfile(f):
                     try:
                         os.remove(f)
