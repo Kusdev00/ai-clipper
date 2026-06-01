@@ -16,3 +16,4 @@ google-auth-httplib2>=0.1
 google-api-python-client>=2.100
 undetected-chromedriver>=3.5
 webdriver-manager>=4.0
+moviepy>=2.0
