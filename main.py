@@ -72,6 +72,11 @@ for _p in (DOWNLOADS_DIR, CLIPS_DIR):
 
 @app.route("/")
 def dashboard():
+    return render_template("dashboard_v2.html")
+
+
+@app.route("/v1")
+def dashboard_v1():
     return render_template("dashboard.html")
 
 
