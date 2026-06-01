@@ -1143,24 +1143,32 @@ def _build_glow_filter(src_w: int, src_h: int, w: int, h: int, fps: int, duratio
     ox = (w - fg_w) // 2
     oy = (h - fg_h) // 2
 
-    # Glow settings
-    glow_pad = 6
-    glow_alpha = "0.4"
-    glow_color = "0xFFFFFF"
+    # Glow settings — solid white border with soft falloff
+    # Inner glow: bright white, fully opaque
+    glow_pad = 8
+    glow_color = "white"
+    glow_alpha = "1.0"
 
-    outer_pad = 20
-    outer_color = "0xCCCCCC"
-    outer_alpha = "0.2"
+    # Outer glow: softer, semi-transparent
+    outer_pad = 28
+    outer_color = "white"
+    outer_alpha = "0.3"
+
+    # Background: very dark so white glow pops
+    bg_alpha = "0.9"
 
     filter_chain = (
         f"[0:v]scale={fg_w}:{fg_h}:flags=lanczos[fg];"
-        f"color=c=black@0.85:s={w}x{h}:d={duration}[base];"
+        f"color=c=black@{bg_alpha}:s={w}x{h}:d={duration}[base];"
+        # Outer glow (large, soft)
         f"[base]drawbox=x={ox - outer_pad}:y={oy - outer_pad}:"
         f"w={fg_w + outer_pad * 2}:h={fg_h + outer_pad * 2}:"
         f"color={outer_color}@{outer_alpha}:t=fill[glow1];"
+        # Inner glow (tighter, brighter)
         f"[glow1]drawbox=x={ox - glow_pad}:y={oy - glow_pad}:"
         f"w={fg_w + glow_pad * 2}:h={fg_h + glow_pad * 2}:"
         f"color={glow_color}@{glow_alpha}:t=fill[glow2];"
+        # Overlay the sharp video on top
         f"[glow2][fg]overlay={ox}:{oy}:format=auto,"
         f"fps={fps},format=yuv420p[vglow]"
     )
