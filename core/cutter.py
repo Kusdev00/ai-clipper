@@ -1432,10 +1432,18 @@ def cut_clip(
             else:
                 cmd2 += ["-an"]
             if ass_file and os.path.isfile(ass_file):
-                ass_path = ass_file.replace("\\", "/").replace(":", "\\\\:")
-                fonts_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "fonts")
-                fonts_dir_e = fonts_dir.replace("\\", "/").replace(":", "\\\\:")
-                cmd2 += ["-vf", f"subtitles=filename='{ass_path}':fontsdir='{fonts_dir_e}'"]
+                # FFmpeg filter graph treats ':' as separator, so drive letter colons
+                # must be escaped with a single backslash: C:\path → C\:/path
+                # Since we use subprocess (no shell), Python string \: = literal \:
+                ass_abs = os.path.abspath(ass_file)
+                fonts_abs = os.path.abspath(os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "fonts"))
+                # Forward slashes for path separators, escape only the drive colon
+                ass_fwd = ass_abs[0] + "\\:" + ass_abs[2:] if len(ass_abs) > 2 and ass_abs[1] == ":" else ass_abs
+                fonts_fwd = fonts_abs[0] + "\\:" + fonts_abs[2:] if len(fonts_abs) > 2 and fonts_abs[1] == ":" else fonts_abs
+                ass_fwd = ass_fwd.replace("\\", "/")
+                fonts_fwd = fonts_fwd.replace("\\", "/")
+                sub_filter = f"subtitles=filename='{ass_fwd}':fontsdir='{fonts_fwd}'"
+                cmd2 += ["-vf", sub_filter]
             else:
                 cmd2 += ["-c:v", "libx264", "-preset", "fast"]
             cmd2 += ["-c:v", "libx264", "-preset", "fast", "-b:v", preset["video_bitrate"],
@@ -1506,11 +1514,14 @@ def cut_clip(
             logger.warning("ASS subtitle generation failed (%s), skipping captions", exc)
 
     if ass_file and os.path.isfile(ass_file):
-        ass_path = ass_file.replace("\\", "/")
-        ass_path_escaped = ass_path.replace(":", "\\\\:")
-        fonts_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "fonts")
-        fonts_dir_escaped = fonts_dir.replace("\\", "/").replace(":", "\\\\:")
-        subtitle_filter = f"subtitles=filename='{ass_path_escaped}':fontsdir='{fonts_dir_escaped}'"
+        ass_abs = os.path.abspath(ass_file)
+        fonts_abs = os.path.abspath(os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "fonts"))
+        # Escape drive colon for FFmpeg filter graph: C:\path → C\:/path
+        ass_fwd = ass_abs[0] + "\\:" + ass_abs[2:] if len(ass_abs) > 2 and ass_abs[1] == ":" else ass_abs
+        fonts_fwd = fonts_abs[0] + "\\:" + fonts_abs[2:] if len(fonts_abs) > 2 and fonts_abs[1] == ":" else fonts_abs
+        ass_fwd = ass_fwd.replace("\\", "/")
+        fonts_fwd = fonts_fwd.replace("\\", "/")
+        subtitle_filter = f"subtitles=filename='{ass_fwd}':fontsdir='{fonts_fwd}'"
         vf_string = vf_string + "," + subtitle_filter
         logger.info("ASS subtitles added to filter chain")
 
