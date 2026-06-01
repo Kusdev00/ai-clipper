@@ -1146,10 +1146,10 @@ def _build_glow_filter(src_w: int, src_h: int, w: int, h: int, fps: int, duratio
     # Glow settings
     glow_pad = 6
     glow_alpha = "0.4"
-    glow_color = "0x8844FF"
+    glow_color = "0xFFFFFF"
 
     outer_pad = 20
-    outer_color = "0x4422AA"
+    outer_color = "0xCCCCCC"
     outer_alpha = "0.2"
 
     filter_chain = (
