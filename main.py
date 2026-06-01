@@ -582,6 +582,31 @@ def regenerate_caption(job_id, clip_index):
     return jsonify({"caption": caption, "hashtags": tags})
 
 
+@app.route("/api/regenerate_hashtags/<job_id>/<int:clip_index>", methods=["POST"])
+def regenerate_hashtags(job_id, clip_index):
+    """Regenerate only hashtags for a specific clip (no caption)."""
+    if job_id not in JOBS:
+        return jsonify({"detail": "Job not found"}), 404
+
+    job = JOBS[job_id]
+    highlights = job.get("highlights", [])
+    if clip_index >= len(highlights):
+        return jsonify({"detail": "Clip not found"}), 404
+
+    h = highlights[clip_index]
+    text = h.get("text", "")
+    if not text:
+        return jsonify({"detail": "No transcript for this clip"}), 400
+
+    from core.ollama_client import generate_hashtags
+
+    tags = generate_hashtags(text, job.get("title", ""))
+    h["hashtags"] = tags
+
+    log.info("Regenerated hashtags %d: [%s]", clip_index, ", ".join(tags))
+    return jsonify({"hashtags": tags})
+
+
 # ════════════════════════════════════════════════════════
 # Pipeline Worker (Background Thread)
 # ════════════════════════════════════════════════════════
@@ -800,30 +825,46 @@ def pipeline_worker(job_id: str, options: dict):
         job["message"] = f"Found {len(highlights)} highlights – generating captions …"
 
         # ── Step 3b: Generate AI captions for each clip ──
+        caption_mode = options.get("caption_mode", "full")  # "full" = caption + hashtags, "hashtags_only" = skip caption
         try:
             from core.ollama_client import generate_tiktok_caption, generate_hashtags, is_available as ollama_available
             if use_ollama and ollama_available():
                 for i, h in enumerate(highlights):
                     text = h.get("text", "")
                     if text:
-                        caption = generate_tiktok_caption(text, job.get("title", ""))
-                        h["caption"] = caption
-                        tags = generate_hashtags(text, job.get("title", ""))
-                        h["hashtags"] = tags
-                        log.info("Clip %d: %s [%s]", i+1, caption[:60], ", ".join(tags))
+                        if caption_mode == "hashtags_only":
+                            h["caption"] = ""
+                            tags = generate_hashtags(text, job.get("title", ""))
+                            h["hashtags"] = tags
+                            log.info("Clip %d: hashtags only [%s]", i+1, ", ".join(tags))
+                        else:
+                            caption = generate_tiktok_caption(text, job.get("title", ""))
+                            h["caption"] = caption
+                            tags = generate_hashtags(text, job.get("title", ""))
+                            h["hashtags"] = tags
+                            log.info("Clip %d: %s [%s]", i+1, caption[:60], ", ".join(tags))
                     else:
                         h["caption"] = ""
                         h["hashtags"] = []
-                job["message"] = f"Generated captions + hashtags for {len(highlights)} clips"
+                if caption_mode == "hashtags_only":
+                    job["message"] = f"Generated hashtags for {len(highlights)} clips"
+                else:
+                    job["message"] = f"Generated captions + hashtags for {len(highlights)} clips"
             else:
                 log.info("Ollama not available, using transcript text as caption")
                 for h in highlights:
-                    h["caption"] = (h.get("text", "") or "")[:200]
+                    if caption_mode == "hashtags_only":
+                        h["caption"] = ""
+                    else:
+                        h["caption"] = (h.get("text", "") or "")[:200]
                     h["hashtags"] = generate_hashtags(h.get("text", "") or "", job.get("title", ""))
         except Exception as exc:
             log.warning("Caption/hashtag generation failed: %s", exc)
             for h in highlights:
-                h["caption"] = (h.get("text", "") or "")[:200]
+                if caption_mode == "hashtags_only":
+                    h["caption"] = ""
+                else:
+                    h["caption"] = (h.get("text", "") or "")[:200]
                 h["hashtags"] = []
 
         # Filter out highlights that are too short (< 5s) — ffmpeg would reject them

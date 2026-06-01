@@ -2009,6 +2009,18 @@ textarea.input-field {
           <label class="toggle"><input type="checkbox" id="oOllama" checked onchange="toggleOllamaStatus()" /><span class="toggle-track"></span></label>
         </div>
       </div>
+      <div class="option-row">
+        <div class="option-info">
+          <div class="option-label">AI Caption Mode</div>
+          <div class="option-hint">Full = caption + hashtags · Tags only = skip caption</div>
+        </div>
+        <div class="option-control">
+          <select class="select-field" id="oCaptionMode" style="width:110px;">
+            <option value="full">Full</option>
+            <option value="hashtags_only">Tags Only</option>
+          </select>
+        </div>
+      </div>
       <div class="status-row" id="ollamaStatusRow">
         <div class="status-pill">
           <span class="status-dot" id="ollamaDot" style="background:var(--text-muted);animation:none;"></span>
@@ -2393,6 +2405,7 @@ async function generateClips() {
     whisper_model: document.getElementById('oWhisper').value,
     brand_template: S.brand,
     use_ollama: document.getElementById('oOllama').checked,
+    caption_mode: document.getElementById('oCaptionMode')?.value || 'full',
     ollama_url: document.getElementById('ollamaUrl')?.value || 'http://localhost:11434',
     ollama_model: document.getElementById('ollamaModel')?.value || 'llama3.1:8b',
   };
@@ -2546,7 +2559,8 @@ function renderClipsFromSSE(highlights) {
         </div>
         <div class="clip-actions">
           <button class="btn btn-ghost btn-xs" onclick="previewClip(${i})">Preview</button>
-          <button class="btn btn-ghost btn-xs" onclick="regenerateCaption(${i})" title="Regenerate">🔄</button>
+          <button class="btn btn-ghost btn-xs" onclick="regenerateCaption(${i})" title="Regenerate caption + hashtags">🔄</button>
+          <button class="btn btn-ghost btn-xs" onclick="regenerateHashtags(${i})" title="Regenerate hashtags only">#️⃣</button>
           <button class="btn btn-ghost btn-xs" onclick="downloadClip(${i})">↓</button>
         </div>
       </div>
@@ -2637,9 +2651,16 @@ function copyCaption(i) {
   const h = S.highlights[i] || {};
   const caption = h.caption || h.text || '';
   const tags = (h.hashtags || []).map(t => '#' + t).join(' ');
-  const full = tags ? caption + '\n\n' + tags : caption;
+  let full = '';
+  if (caption && tags) {
+    full = caption + '\n\n' + tags;
+  } else if (tags) {
+    full = tags;
+  } else {
+    full = caption;
+  }
   navigator.clipboard.writeText(full).then(() => {
-    toast('Caption + hashtags copied!', 'ok');
+    toast('Copied!', 'ok');
   }).catch(() => {
     toast('Copy failed — select and Ctrl+C manually', 'err');
   });
@@ -2687,6 +2708,34 @@ function regenerateCaption(i) {
     .catch(() => {
       toast('Regeneration failed', 'err');
       if (capEl) capEl.textContent = (h.caption || text).substring(0, 150);
+    });
+}
+
+function regenerateHashtags(i) {
+  const h = S.highlights[i];
+  if (!h) return;
+  const text = h.text || '';
+  if (!text) return toast('No transcript for this clip', 'err');
+  const tagsEl = document.getElementById('tags' + i);
+  if (tagsEl) tagsEl.textContent = 'Generating…';
+  const jobId = h._jobId || S.jobId;
+  const clipIdx = h._clipIdx !== undefined ? h._clipIdx : i;
+  fetch('/api/regenerate_hashtags/' + jobId + '/' + clipIdx, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: '{}',
+  })
+    .then(r => r.json())
+    .then(d => {
+      if (d.hashtags) {
+        h.hashtags = d.hashtags;
+        if (tagsEl) tagsEl.textContent = (d.hashtags.length > 0) ? d.hashtags.map(t => '#' + t).join(' ') : '';
+        toast('Hashtags regenerated!', 'ok');
+      }
+    })
+    .catch(() => {
+      toast('Hashtag regeneration failed', 'err');
+      if (tagsEl) tagsEl.textContent = (h.hashtags && h.hashtags.length > 0) ? h.hashtags.map(t => '#' + t).join(' ') : '';
     });
 }
 
