@@ -186,10 +186,10 @@ def progress_stream(job_id: str):
                 break
 
             payload = {
-                "status": job["status"],
-                "progress": job["progress"],
-                "message": job["message"],
-                "steps": job["steps"],
+                "status": job.get("status", "unknown"),
+                "progress": job.get("progress", 0),
+                "message": job.get("message", ""),
+                "steps": job.get("steps", {}),
             }
             if job["status"] == "completed":
                 payload["highlights"] = job.get("highlights", [])
@@ -501,11 +501,18 @@ def bulk_upload():
             "status": "loaded",
             "source_file": save_path,
             "created": time.time(),
+            "message": "Video loaded — ready to process",
+            "progress": 0,
+            "highlights": [],
+            "chapters": [],
+            "clips": {},
+            "options": {},
             "steps": {
                 "download": "done",
                 "transcribe": "pending",
                 "analyze": "pending",
                 "cut": "pending",
+                "upload": "pending",
             },
         }
 
@@ -525,6 +532,7 @@ def start_job(job_id):
 
     job["status"] = "running"
     job["progress"] = 5
+    job["message"] = "Starting pipeline…"
 
     # Get options from request or use defaults
     data = request.json or {}
