@@ -1344,8 +1344,14 @@ def cut_clip(
         if is_complex:
             log_path = os.path.join(clip_dir, f"ffmpeg_{clip_id:02d}.log")
             log_fh = open(log_path, "w", encoding="utf-8", errors="replace")
+            # Prevent ffmpeg from spawning console windows on Windows
+            # and limit memory usage
+            creationflags = 0
+            if os.name == "nt":
+                creationflags = subprocess.CREATE_NO_WINDOW
             proc = subprocess.Popen(
                 cmd, stdout=log_fh, stderr=subprocess.STDOUT, env=ffmpeg_env,
+                creationflags=creationflags,
             )
             ret = proc.wait(timeout=600)
             log_fh.close()
@@ -1359,9 +1365,13 @@ def cut_clip(
                     f"FFmpeg cut failed (rc={ret}) for {output_path}:\n{''.join(tail)}"
                 )
         else:
+            creationflags = 0
+            if os.name == "nt":
+                creationflags = subprocess.CREATE_NO_WINDOW
             proc = subprocess.Popen(
                 cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
                 text=True, bufsize=1, env=ffmpeg_env,
+                creationflags=creationflags,
             )
             total_us = int(duration * 1_000_000)
             try:

@@ -912,6 +912,9 @@ def pipeline_worker(job_id: str, options: dict):
                 job["progress"] = min(overall, 99)
 
             try:
+                log.info("cut_clip: starting clip %d/%d (%.1fs @ %s)",
+                         i + 1, len(highlights), h["end"] - h["start"],
+                         options.get("crop_mode", "blur_bg"))
                 clip_path = cut_clip(
                     source_path=source_path,
                     job_id=job_id,
@@ -930,7 +933,7 @@ def pipeline_worker(job_id: str, options: dict):
                 job["message"] = f"Generated clip {i + 1} / {len(highlights)}"
                 log.info("Clip %d/%d done: %s", i + 1, len(highlights), clip_path)
             except Exception as exc:
-                log.error("Clip %d failed: %s", i + 1, exc)
+                log.error("Clip %d failed: %s", i + 1, exc, exc_info=True)
                 job["message"] = f"Clip {i + 1} failed: {exc}"
                 # Skip this clip — clips dict won't have this index, get_clip returns 404
 
