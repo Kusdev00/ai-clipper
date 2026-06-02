@@ -61,6 +61,17 @@ app = Flask(
 JOBS: dict[str, dict] = {}
 JOBS_LOCK = threading.Lock()
 
+def _save_job(job_id: str, job: dict):
+    """Persist job status to disk so it survives app crashes."""
+    try:
+        import json as _json
+        _path = os.path.join(DOWNLOADS_DIR, job_id, "job.json")
+        os.makedirs(os.path.dirname(_path), exist_ok=True)
+        with open(_path, "w", encoding="utf-8") as _f:
+            _json.dump(job, _f, ensure_ascii=False, indent=2, default=str)
+    except Exception:
+        pass
+
 # Ensure required directories exist on startup
 for _p in (DOWNLOADS_DIR, CLIPS_DIR):
     os.makedirs(_p, exist_ok=True)
@@ -699,6 +710,7 @@ def pipeline_worker(job_id: str, options: dict):
     try:
         # ── Step 1: Download / Locate Source ────────────
         job["status"] = "running"
+        _save_job(job_id, job)
 
         # Bulk uploads already have the file — skip download
         is_bulk = job_id.startswith("bulk_") and job.get("source_file")
@@ -892,9 +904,11 @@ def pipeline_worker(job_id: str, options: dict):
         highlights = highlights[:num_clips]
 
         job["message"] = f"Found {len(highlights)} highlights – generating clips …"
+        _save_job(job_id, job)
 
         # ── Step 4: Cut Clips ─────────────────────────
         job["steps"]["cut"] = "active"
+        _save_job(job_id, job)
         job["progress"] = 73
 
         from core.cutter import cut_clip, build_caption_words, get_brand_template
@@ -932,6 +946,9 @@ def pipeline_worker(job_id: str, options: dict):
                 clips[i] = clip_path
                 job["message"] = f"Generated clip {i + 1} / {len(highlights)}"
                 log.info("Clip %d/%d done: %s", i + 1, len(highlights), clip_path)
+            except subprocess.TimeoutExpired:
+                log.error("Clip %d timed out after 600s", i + 1)
+                job["message"] = f"Clip {i + 1} timed out"
             except Exception as exc:
                 log.error("Clip %d failed: %s", i + 1, exc, exc_info=True)
                 job["message"] = f"Clip {i + 1} failed: {exc}"
@@ -955,6 +972,7 @@ def pipeline_worker(job_id: str, options: dict):
         job["progress"] = 100
         job["status"] = "completed"
         job["message"] = f"Done – {len(final_highlights)} clips ready!"
+        _save_job(job_id, job)
 
     except Exception as exc:
         import traceback as _tb
@@ -967,6 +985,7 @@ def pipeline_worker(job_id: str, options: dict):
             if step_status == "active":
                 job["steps"][step_name] = "error"
                 break
+        _save_job(job_id, job)
 
 
 # ════════════════════════════════════════════════════════
