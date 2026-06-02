@@ -103,7 +103,7 @@ def _detect_ffmpeg():
 FFMPEG = _detect_ffmpeg()
 # Derive ffprobe path — WinGet packages keep it alongside ffmpeg.exe
 if os.name == "nt":
-    _ffprobe_candidate = FFMPEG.replace("ffmpeg.exe", "ffprobe.exe").replace("ffmpeg", "ffprobe")
+    _ffprobe_candidate = FFMPEG.replace("ffmpeg.exe", "ffprobe.exe")
     FFPROBE = os.environ.get("FFPROBE_BIN", _ffprobe_candidate if os.path.isfile(_ffprobe_candidate) else "ffprobe")
 else:
     FFPROBE = os.environ.get("FFPROBE_BIN", FFMPEG.replace("ffmpeg", "ffprobe"))
@@ -1147,14 +1147,16 @@ def _build_glow_filter(src_w: int, src_h: int, w: int, h: int, fps: int, duratio
     filter_chain = (
         # Split input: one copy for base (sharp), one for glow (blurred)
         "[0:v]split=2[base][blur];"
-        # Glow layer: scale to full canvas, apply Gaussian blur
-        f"[blur]scale={w}:{h}:flags=lanczos,gblur=sigma=25[glow];"
-        # Base layer: scale to fit inside, pad to full canvas with dark background
+        # Glow layer: scale to full canvas, blur, then convert to planar RGB
+        # (must be RGB before blend — screen mode math on YUV chroma channels
+        # pushes U/V from neutral 128 → ~192, causing blue+red = purple tint)
+        f"[blur]scale={w}:{h}:flags=lanczos,gblur=sigma=25,format=gbrp[glow];"
+        # Base layer: scale to fit, pad with black, convert to planar RGB
         f"[base]scale={fg_w}:{fg_h}:flags=lanczos,"
-        f"pad={w}:{h}:{ox}:{oy}:color=black@0.85[basepad];"
-        # Blend glow on top of base using screen mode for soft light effect
-        f"[basepad][glow]blend=all_mode=screen:all_opacity=0.35,"
-        f"fps={fps},format=yuv420p[vglow]"
+        f"pad={w}:{h}:{ox}:{oy}:color=0x000000,format=gbrp[basepad];"
+        # Blend in RGB space, then convert to yuv420p for encoding
+        f"[basepad][glow]blend=all_mode=screen:all_opacity=0.35[blended];"
+        f"[blended]fps={fps},format=yuv420p[vglow]"
     )
 
     return filter_chain, True
@@ -1302,11 +1304,15 @@ def cut_clip(
             # Chain subtitles after blend output: [vglow]subtitles=...
             with open(vf_script, "r", encoding="utf-8") as sf:
                 sub_filter = sf.read().strip()
-            # Replace the subtitle filter's input label with [vglow]
-            # The script contains: subtitles=filename='...':fontsdir='...'
-            # We need to prefix it with [vglow]
+            # The subtitle filter has no output label → FFmpeg auto-maps it
             filter_content = f"{vf_string};[vglow]{sub_filter}"
-        cmd += ["-filter_complex", filter_content]
+            cmd += ["-filter_complex", filter_content]
+        else:
+            # [vglow] is a named output — must explicitly map it, otherwise
+            # FFmpeg falls back to the raw unfiltered input stream
+            cmd += ["-filter_complex", filter_content, "-map", "[vglow]"]
+        if source_has_audio:
+            cmd += ["-map", "0:a?"]
     else:
         if vf_script:
             with open(vf_script, "r", encoding="utf-8") as sf:
