@@ -370,7 +370,20 @@ def detect_scenes(filepath: str, threshold: float = 0.3) -> list[dict]:
         "-vf", f"select='gt(scene,{threshold})',showinfo",
         "-f", "null", "-",
     ]
-    result = _run(cmd, timeout=600)
+    # Get video duration via ffprobe so we can scale the timeout.
+    # Scene detection decodes every frame, so we need ~2x the duration in seconds.
+    # Min 120s, max 1200s (20 min) — videos >1h are already skipped by caller.
+    try:
+        probe_cmd = ["ffprobe", "-v", "quiet", "-print_format", "json",
+                     "-show_format", filepath]
+        probe = _run(probe_cmd, timeout=30)
+        import json as _json
+        dur = float(_json.loads(probe.stdout).get("format", {}).get("duration", 0))
+    except Exception:
+        dur = 0
+    timeout = min(max(int(dur * 2), 120), 1200)
+
+    result = _run(cmd, timeout=timeout)
     scenes: list[dict] = []
     for match in re.finditer(r"pts_time:(\d+\.?\d*)", result.stderr or ""):
         scenes.append({
