@@ -849,11 +849,12 @@ def find_highlights(
         clip_start = max(0, st - 3)
         clip_end = min(duration, et)
 
-        # Extend to include nearby transcript
-        for j in range(i, min(i + 5, len(transcriptions))):
-            next_seg = transcriptions[j]
-            if next_seg["start"] <= clip_end + 3.0:
-                clip_end = min(duration, next_seg["end"])
+        # Extend clip_end slightly to end on a clean transcript boundary
+        # (only extend, never shrink; stop after 1 extension to avoid runaway growth)
+        for seg in transcriptions:
+            if seg["start"] <= clip_end + 3.0 and seg["end"] > clip_end:
+                clip_end = min(duration, seg["end"])
+                break  # only extend by one segment boundary
 
         # Find nearby excitement
         next_excite = None
