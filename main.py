@@ -900,8 +900,13 @@ def pipeline_worker(job_id: str, options: dict):
 
         # Filter out highlights that are too short — minimum 3s for short videos, 5s for longer
         min_dur = 3.0 if duration < 30 else 5.0
+        log.info("Filtering highlights: %d before, min_dur=%.1fs", len(highlights), min_dur)
+        for h in highlights:
+            dur = h.get("end", 0) - h.get("start", 0)
+            log.info("  highlight %d: %.1fs - %.1fs (%.1fs)", h.get("id", -1), h.get("start", 0), h.get("end", 0), dur)
         highlights = [h for h in highlights if (h.get("end", 0) - h.get("start", 0)) >= min_dur]
         highlights = highlights[:num_clips]
+        log.info("Filtering highlights: %d after", len(highlights))
 
         job["message"] = f"Found {len(highlights)} highlights – generating clips …"
         _save_job(job_id, job)
