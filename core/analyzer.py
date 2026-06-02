@@ -366,10 +366,11 @@ def detect_scenes(filepath: str, threshold: float = 0.3) -> list[dict]:
     """
     cmd = [
         "ffmpeg", "-i", filepath,
+        "-an",
         "-vf", f"select='gt(scene,{threshold})',showinfo",
         "-f", "null", "-",
     ]
-    result = _run(cmd, timeout=120)
+    result = _run(cmd, timeout=600)
     scenes: list[dict] = []
     for match in re.finditer(r"pts_time:(\d+\.?\d*)", result.stderr or ""):
         scenes.append({
